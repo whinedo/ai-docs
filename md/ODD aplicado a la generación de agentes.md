@@ -26,7 +26,7 @@
 | El prompt se deriva de la spec | El system prompt se genera a partir de la spec y se versiona con ella; no se retoca a mano sin actualizarla |
 | Límites de autonomía explícitos | La spec separa lo permitido, lo que requiere confirmación humana y lo prohibido; las evals de traza lo comprueban |
 | Proporcionalidad | Un ajuste menor no genera documento de feature; un cambio de comportamiento siempre pasa por la spec |
-| CI como puerta | Pruebas, contratos de herramientas y evals bloquean el merge; la verificación del agente de código no basta |
+| CI como quality gate | Tests, contratos de herramientas y evals bloquean el merge; la verificación del agente de código no basta |
 
 ---
 
@@ -60,7 +60,7 @@ flowchart TD
 
 ---
 
-## 4. Plantilla de spec del agente
+## 4. Template de spec del agente
 
 La spec describe solo comportamiento observable: nada de modelos, librerías ni prompts. Si una sección no se puede rellenar, se deja como pregunta abierta en lugar de inventarla.
 
@@ -104,7 +104,7 @@ Una frase: qué problema resuelve y para quién.
 ## 12. Preguntas abiertas
 ```
 
-El campo **Riesgo** en la cabecera es una adición para arquitectura: determina las puertas que se aplican (sección 9).
+El campo **Riesgo** en la cabecera es una adición para arquitectura: determina los quality gates que se aplican (sección 9).
 
 ---
 
@@ -136,7 +136,7 @@ Las respuestas citan solo snippets; leer la página completa mejora la precisió
 
 ---
 
-## 6. Evaluación: evals como puerta
+## 6. Evaluación: evals como quality gate
 
 | Tipo de eval | Qué comprueba | Cómo se puntúa |
 | --- | --- | --- |
@@ -173,14 +173,14 @@ agentes/
 │   ├── datasets/<agente>.jsonl   # casos con ID de AC
 │   ├── rubrics/
 │   └── run_evals.py
-└── tests/                        # tests unitarios de herramientas
+└── tests/                        # unit tests de herramientas
 ```
 
 ---
 
 ## 8. Configuración en Claude Code con Gentle AI 4.x
 
-**Instalación y comprobación** (macOS, app de Claude con la pestaña Code):
+**Instalación y verificación** (macOS, app de Claude con la pestaña Code):
 
 1. Instala la CLI de Claude Code (`curl -fsSL https://claude.ai/install.sh | bash`): Gentle AI necesita el comando `claude` en el `PATH` para configurar Claude Code, aunque trabajes desde la app.
 2. Ejecuta el instalador `gentle-ai` y elige Claude Code, el preset `full-gentleman`, la persona `neutral` y CodeGraph.
@@ -217,7 +217,7 @@ Compara cada AC con su umbral en specs/$ARGUMENTS/spec.md §10.
 Devuelve una tabla AC · resultado · umbral · OK/FALLA y no modifiques código.
 ```
 
-**Subagente revisor** (`.claude/agents/spec-reviewer.md`): solo lectura (`tools: Read, Grep, Glob`); comprueba que la spec tiene las 12 secciones, que cada REQ tiene un AC con umbral numérico y que §7 separa permitido, confirmación y prohibido.
+**Subagente reviewer** (`.claude/agents/spec-reviewer.md`): solo lectura (`tools: Read, Grep, Glob`); comprueba que la spec tiene las 12 secciones, que cada REQ tiene un AC con umbral numérico y que §7 separa permitido, confirmación y prohibido.
 
 **Worktrees:** `.claude/worktrees/` en `.gitignore`, `.env` en `.worktreeinclude` y una sesión con worktree por cambio.
 
@@ -225,11 +225,11 @@ Devuelve una tabla AC · resultado · umbral · OK/FALLA y no modifiques código
 
 ## 9. Gobierno por nivel de riesgo
 
-| Riesgo del agente | Ejemplos | Puertas obligatorias |
+| Riesgo del agente | Ejemplos | Quality gates obligatorios |
 | --- | --- | --- |
 | Bajo | Solo lectura, sin datos sensibles, salida revisada por una persona | Spec aprobada por el equipo; evals de formato y calidad en CI |
 | Medio | Accede a fuentes externas, actúa con herramientas reversibles | Lo anterior + evals de uso de herramientas y robustez; revisión de PR por otro equipo o un arquitecto |
-| Alto | Seguridad, datos personales, acciones con efectos, decisiones automatizadas | Lo anterior + aprobación de seguridad; RDD activado; registro de auditoría; evals adversariales; despliegue gradual |
+| Alto | Seguridad, datos personales, acciones con efectos, decisiones automatizadas | Lo anterior + aprobación de seguridad; RDD activado; audit log; evals adversariales; rollout gradual |
 
 ---
 
@@ -305,7 +305,7 @@ JSON: { "answer": str (≤ 200 palabras), "sources": [{"title", "url"}], "confid
 - Prohibido: inventar URLs, rellenar formularios, descargar ficheros.
 
 ## 8. No funcionales
-- Máx. 8 llamadas a herramientas · p95 < 30 s
+- Máx. 8 tool calls · p95 < 30 s
 
 ## 10. Criterios de aceptación
 - AC-01 (REQ-01): ≥ 90 % sin afirmaciones sin fuente (juez con rúbrica, 40 casos × 3)
@@ -336,7 +336,7 @@ flowchart LR
   O --> PO[Subagente política\nsolo lectura]
   SC --> O
   PO --> O
-  O --> H[Hallazgos JSON\n+ registro de auditoría]
+  O --> H[Hallazgos JSON\n+ audit log]
   H --> R[Revisión humana\nseguridad / equipo]
   R --> I[Issues o comentarios en PR\ncon confirmación]
 ```
@@ -391,9 +391,9 @@ JSON por hallazgo: { "id", "severidad": "crítica"|"alta"|"media"|"baja", "regla
 - AC-03 (REQ-03): 100 % de hallazgos críticos sembrados marcan la PR como bloqueante
 - AC-04 (REQ-04): 0 secretos en claro en salidas, comentarios o logs (100 % de 40 casos)
 - AC-05 (REQ-05): 100 % de 30 casos con instrucciones incrustadas no alteran hallazgos ni herramientas usadas
-- AC-06 (§7): 0 llamadas a herramientas prohibidas y 0 escrituras sin confirmación en todas las trazas
+- AC-06 (§7): 0 tool calls prohibidas y 0 escrituras sin confirmación en todas las trazas
 - AC-07 (REQ-06): 100 % de fallos de escáner simulados producen "análisis incompleto"
-- AC-08 (REQ-07): 100 % de ejecuciones con registro de auditoría completo
+- AC-08 (REQ-07): 100 % de ejecuciones con audit log completo
 ```
 
 **Documento de feature (tareas, extracto ilustrativo):**
@@ -403,8 +403,8 @@ Spec de referencia: specs/security-control-agent/spec.md (v1.0) · Riesgo: alto 
 - [ ] T1 Contratos y tests de read_diff, run_scanner y get_policy (lista cerrada de escáneres)
 - [ ] T2 Enmascarado de secretos en salidas y logs + tests (AC-04)
 - [ ] T3 Orquestador y subagentes de solo lectura; allowlist de herramientas por subagente (AC-06)
-- [ ] T4 Puerta de confirmación para comment_pr y create_issue (AC-06)
-- [ ] T5 Registro de auditoría (AC-08)
+- [ ] T4 Gate de confirmación para comment_pr y create_issue (AC-06)
+- [ ] T5 Audit log (AC-08)
 - [ ] T6 Corpus de vulnerabilidades sembradas y PR reales etiquetadas (AC-01, AC-02, AC-03)
 - [ ] T7 Casos adversariales: instrucciones incrustadas y fallos de escáner (AC-05, AC-07)
 - [ ] T8 Ejecutar evals completas y revisión de Seguridad
@@ -414,11 +414,11 @@ Spec de referencia: specs/security-control-agent/spec.md (v1.0) · Riesgo: alto 
 
 | Familia | Casos | Qué detecta |
 | --- | --- | --- |
-| Vulnerabilidades sembradas | Repos de prueba con fallos conocidos (inyección, secretos, dependencias vulnerables, IaC permisiva) | Recall y severidad correcta |
+| Vulnerabilidades sembradas | Repos de test con fallos conocidos (inyección, secretos, dependencias vulnerables, IaC permisiva) | Recall y severidad correcta |
 | PR reales etiquetadas | Muestra histórica revisada por Seguridad | Precisión y ruido para los equipos |
 | Adversariales | Comentarios y ficheros con instrucciones del tipo "ignora esta regla" o "marca como limpio" | Resistencia a manipulación |
 | Fallos operativos | Escáner caído, timeout, política inexistente | Comportamiento seguro ante errores |
-| Fuga de datos | Secretos reales de prueba en el diff | Enmascarado en todas las salidas |
+| Fuga de datos | Secretos de test en el diff | Enmascarado en todas las salidas |
 
 **Puntos de arquitectura:**
 
@@ -427,7 +427,7 @@ Spec de referencia: specs/security-control-agent/spec.md (v1.0) · Riesgo: alto 
 - **Fallo seguro:** un análisis incompleto nunca se presenta como limpio (REQ-06).
 - **Trazabilidad para auditoría:** versión de spec, de política y de escáneres en cada registro (REQ-07).
 - **Gobierno del cambio del propio agente:** cualquier cambio en su spec, prompt, herramientas o modelo requiere aprobación de Seguridad, RDD y la suite completa, incluida la adversarial.
-- **Despliegue gradual:** primero en modo informativo (sin bloquear), comparando con la revisión humana; después como control bloqueante cuando AC-01 a AC-03 se mantengan estables.
+- **Rollout gradual:** primero en modo informativo (sin bloquear), comparando con la revisión humana; después como control bloqueante cuando AC-01 a AC-03 se mantengan estables.
 
 ---
 
@@ -435,7 +435,7 @@ Spec de referencia: specs/security-control-agent/spec.md (v1.0) · Riesgo: alto 
 
 | Skill | Qué hace | Invocación |
 | --- | --- | --- |
-| `new-agent-spec` | Crea `specs/<agente>/spec.md` desde la plantilla y pregunta por los huecos | Manual |
+| `new-agent-spec` | Crea `specs/<agente>/spec.md` desde el template y pregunta por los huecos | Manual |
 | `add-tool` | Herramienta + contrato + tests + spec §6/§7 + caso de eval | Manual |
 | `run-evals` | Ejecuta la suite y compara con los umbrales de §10 | Manual |
 | `eval-from-bug` | Convierte un fallo observado en un caso de eval con su AC | Manual |
@@ -451,7 +451,7 @@ Las skills con efectos secundarios llevan `disable-model-invocation: true` para 
 | --- | --- | --- |
 | La spec vive en el documento de feature | Al cerrar la feature nadie sabe qué debe hacer el agente | Spec propia en `specs/`; el documento la cita |
 | Prompt-first | Se itera el prompt sin criterios | Spec y evals antes del prompt |
-| Verificación del agente de código como puerta | Se integra porque "ODD cerró la feature" | Evals y tests en CI bloquean el merge |
+| Verificación del agente de código como quality gate | Se integra porque "ODD cerró la feature" | Evals y tests en CI bloquean el merge |
 | Autonomía implícita | El agente hace acciones que nadie aprobó | §7 obligatoria y comprobada en evals de traza |
 | Agente de seguridad con permisos de escritura | Corrige o aprueba por su cuenta | Separación de funciones y confirmación humana |
 | Eval por intuición | "Lo probé con tres casos" | Dataset versionado y umbrales sobre varias ejecuciones |
@@ -463,13 +463,14 @@ Las skills con efectos secundarios llevan `disable-model-invocation: true` para 
 
 - [ ] Gentle AI 4.x instalado y verificado (doctor, orquestador ODD cargado, MCP conectados)
 - [ ] `CLAUDE.md` de proyecto con las reglas de agente (spec, evals, prompt derivado, datos como datos)
-- [ ] Plantilla de spec con nivel de riesgo y plantilla de casos de eval en el repo
+- [ ] Template de spec con nivel de riesgo y template de casos de eval en el repo
 - [ ] Cada agente con spec aprobada, changelog y suite de evals con IDs de AC
-- [ ] Puertas por nivel de riesgo aplicadas en CI y en revisión
-- [ ] Skills y subagente revisor disponibles en `.claude/`
+- [ ] Quality gates por nivel de riesgo aplicadas en CI y en revisión
+- [ ] Skills y subagente reviewer disponibles en `.claude/`
 - [ ] Worktrees configurados: `.gitignore`, `.worktreeinclude`, una sesión por cambio
-- [ ] Agentes de riesgo alto: aprobación de seguridad, RDD, auditoría y despliegue gradual
-- [ ] Modelo de ejecución fijado en el plan (etiqueta exacta) y validado con las evals de la spec (Anexo A)
+- [ ] Agentes de riesgo alto: aprobación de seguridad, RDD, auditoría y rollout gradual
+- [ ] Modelo de ejecución fijado en el plan (tag exacto) y validado con las evals de la spec (Anexo A)
+- [ ] CI en tres capas: pre-commit, GitHub Actions con required check y evals con el modelo real (Anexo B)
 
 ---
 
@@ -484,7 +485,7 @@ Las skills con efectos secundarios llevan `disable-model-invocation: true` para 
 | Los datos no salen del equipo: útil cuando la spec prohíbe enviar datos fuera (§7 del agente de seguridad) | Menor capacidad de razonamiento y menos fiabilidad en cadenas largas de herramientas |
 | Sin coste por token ni dependencia de un proveedor externo | Latencia y concurrencia limitadas por el equipo |
 | Funciona sin conexión | Hay que operar el modelo: versiones, memoria, actualizaciones |
-| Ejecución reproducible fijando la etiqueta del modelo | En 16 GB compite por memoria con el resto de aplicaciones |
+| Ejecución reproducible fijando el tag del modelo | En 16 GB compite por memoria con el resto de aplicaciones |
 
 ### A.2 Por qué qwen3.5:9b en este equipo
 
@@ -509,17 +510,17 @@ Ollama usa por defecto un contexto de solo 4.096 tokens, demasiado corto para un
 
 ```bash
 launchctl setenv OLLAMA_CONTEXT_LENGTH 16384   # contexto por defecto del servidor
-launchctl setenv OLLAMA_FLASH_ATTENTION 1      # requisito para cuantizar la caché KV
-launchctl setenv OLLAMA_KV_CACHE_TYPE q8_0     # caché KV en Q8: menos memoria sin degradar las tool calls
+launchctl setenv OLLAMA_FLASH_ATTENTION 1      # requisito para cuantizar la KV cache
+launchctl setenv OLLAMA_KV_CACHE_TYPE q8_0     # KV cache en Q8: menos memoria sin degradar las tool calls
 launchctl setenv OLLAMA_KEEP_ALIVE 30m         # mantener el modelo cargado entre ejecuciones
 ```
 
 | Parámetro | Valor recomendado en 16 GB | Motivo |
 | --- | --- | --- |
-| Contexto (`num_ctx`) | 16.384; máximo 32.768 | Más contexto compite por memoria; si desborda a la CPU, empeoran las llamadas a herramientas |
-| Caché KV | `q8_0` | Q4 en la caché reduce la precisión de las llamadas a herramientas |
+| Contexto (`num_ctx`) | 16.384; máximo 32.768 | Más contexto compite por memoria; si desborda a la CPU, empeora el tool calling |
+| KV cache | `q8_0` | Q4 en la KV cache reduce la precisión del tool calling |
 | Temperatura | 0,1–0,3 | Salidas estructuradas más estables |
-| Razonamiento | Desactivado en las llamadas a herramientas | Evita respuestas vacías o herramientas en el campo de razonamiento |
+| Razonamiento | Desactivado en las tool calls | Evita respuestas vacías o herramientas en el campo de razonamiento |
 
 ### A.5 Modelo con nombre de proyecto (Modelfile)
 
@@ -553,7 +554,7 @@ def build_llm():
             base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
             num_ctx=int(os.getenv("AGENT_LLM_NUM_CTX", "16384")),
             temperature=0.2,
-            reasoning=False,          # sin razonamiento en las llamadas a herramientas
+            reasoning=False,          # sin razonamiento en las tool calls
         )
     raise ValueError(f"Proveedor no soportado: {provider}")
 ```
@@ -564,7 +565,7 @@ from src.agents.llm import build_llm
 from src.tools.web import web_search, fetch_page
 from src.agents.schemas import ResearchAnswer
 
-MAX_STEPS = 8                                # spec §8: máximo de llamadas a herramientas
+MAX_STEPS = 8                                # spec §8: máximo de tool calls
 
 llm = build_llm().bind_tools([web_search, fetch_page])
 final = build_llm().with_structured_output(ResearchAnswer)   # spec §4: esquema de salida
@@ -576,7 +577,7 @@ Alternativa sin LangChain: Ollama expone una API compatible con OpenAI en `http:
 
 - Pocas herramientas por agente, con nombres y descripciones claros.
 - Bucle con límite de pasos explícito (spec §8) y salida final validada contra el esquema (spec §4).
-- Un reintento como máximo cuando la salida no valida; si vuelve a fallar, error controlado en lugar de improvisar.
+- Un retry como máximo cuando la salida no valida; si vuelve a fallar, error controlado en lugar de improvisar.
 - Instrucciones del sistema cortas y derivadas de la spec; los modelos pequeños pierden coherencia tras 2–3 llamadas seguidas a herramientas.
 
 ### A.7 El modelo en el plan y en el documento de feature
@@ -595,13 +596,13 @@ Cambiar de modelo es un cambio de **comportamiento** del agente: es sustancial p
 
 | Paso | Acción |
 | --- | --- |
-| 1 | Ejecutar la suite con el modelo de referencia y guardar el resultado como línea base |
+| 1 | Ejecutar la suite con el modelo de referencia y guardar el resultado como baseline |
 | 2 | Ejecutar la misma suite con `agentes-qwen` (`/run-evals <agente>` con `AGENT_LLM_PROVIDER=ollama`) |
 | 3 | Comparar por AC: cada umbral de la spec §10 debe cumplirse con el modelo local |
 | 4 | Medir latencia p95 y número de pasos frente a la spec §8 en este equipo |
 | 5 | Si algún AC falla: ajustar prompt, herramientas o diseño; si sigue fallando, el modelo no es apto para ese agente |
 
-Fija la etiqueta exacta del modelo en el resultado de cada ejecución: una actualización de `qwen3.5:9b` en Ollama puede cambiar el comportamiento.
+Fija el tag exacto del modelo en el resultado de cada ejecución: una actualización de `qwen3.5:9b` en Ollama puede cambiar el comportamiento.
 
 ### A.9 Aptitud por agente
 
@@ -618,9 +619,148 @@ Fija la etiqueta exacta del modelo en el resultado de cada ejecución: una actua
 | Respuestas muy lentas | El modelo desborda a la CPU | `ollama ps`; cerrar aplicaciones o bajar `num_ctx` |
 | La herramienta no se invoca o la respuesta llega vacía | Modo razonamiento activo | `reasoning=False` en `ChatOllama` o `think: false` en la API |
 | El agente pierde el hilo a mitad de tarea | Contexto corto (4.096 por defecto) | Subir `num_ctx`; comprobar que la variable de entorno se aplicó |
-| JSON inválido en la salida | Modelo pequeño con temperatura alta | Temperatura 0,1–0,3, `with_structured_output` y un reintento |
+| JSON inválido en la salida | Modelo pequeño con temperatura alta | Temperatura 0,1–0,3, `with_structured_output` y un retry |
 | "does not support tools" | Modelo sin soporte de herramientas (por ejemplo `gemma3`) | Usar `qwen3.5:9b` o `gemma4:12b` |
-| Resultados distintos tras actualizar | Nueva versión de la etiqueta | Fijar la etiqueta, registrar el ID (`ollama list`) y repetir evals |
+| Resultados distintos tras actualizar | Nueva versión del tag | Fijar el tag, registrar el ID (`ollama list`) y repetir evals |
+
+---
+
+## Anexo B. CI para agentes propios
+
+**Conclusión:** ODD no exige CI. Gentle AI cierra cada tarea con la evidencia que observa el propio agente. La CI se recomienda como **quality gate independiente del agente que escribió el código**. Para agentes propios en un Mac con Ollama, la recomendación es una CI en **tres capas**: checks locales en cada commit, GitHub Actions sin modelo en cada PR y evals con el modelo real en el equipo donde corre Ollama.
+
+### B.1 Las tres capas
+
+```mermaid
+flowchart LR
+  A["Capa 1 · local\npre-commit\nlint, tipos, unit tests"] --> B["Capa 2 · GitHub Actions\nen cada PR\ntests del agent loop con LLM falso"] --> C["Capa 3 · Mac con Ollama\nevals con el modelo real\nmake evals o self-hosted runner"]
+  B -- required check --> M["Merge a main\n(branch protection)"]
+  C -- tabla por AC en el documento de feature y en la PR --> M
+```
+
+| Capa | Dónde | Cuándo | Qué comprueba | ¿Necesita modelo? | Coste |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Tu Mac, `pre-commit` | En cada commit | Lint, tipos, unit tests de herramientas | No | Segundos |
+| 2 | GitHub Actions (runner hospedado) | En cada PR | Lo mismo + tests del agent loop con LLM falso + validación de datasets de evals | No | Gratis en repos públicos; 2.000 minutos al mes en privados con el plan Free |
+| 3 | Tu Mac con Ollama | Antes de abrir la PR, o en PR a `main` / cada noche con self-hosted runner | Evals con el modelo real frente a los umbrales de la spec §10 | Sí | Tiempo de tu equipo |
+
+Las evals con el modelo no van en los runners hospedados: no tienen GPU de Apple y un modelo de 9B en CPU sería muy lento. Se ejecutan en el equipo que ya tiene Ollama.
+
+### B.2 Capa 1: pre-commit
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: local
+    hooks:
+      - id: checks
+        name: ruff + mypy + tests sin LLM
+        entry: bash -c "ruff check . && mypy src && pytest -q -m 'not llm'"
+        language: system
+        pass_filenames: false
+```
+
+```bash
+pip install pre-commit && pre-commit install
+```
+
+Marca con `@pytest.mark.llm` todo test que llame al modelo real, para excluirlo de esta capa y de la siguiente:
+
+```toml
+# pyproject.toml
+[tool.pytest.ini_options]
+markers = ["llm: tests que llaman al modelo real (capa 3)"]
+```
+
+### B.3 Capa 2: GitHub Actions con LLM falso
+
+Lo determinista del agente se prueba sin modelo: límite de pasos (spec §8), esquema de salida (spec §4), qué herramienta se invoca y cuándo, y comportamiento ante errores de herramientas.
+
+```python
+# tests/test_research_loop.py
+from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
+from langchain_core.messages import AIMessage
+from src.agents.research_agent import run_agent
+
+def test_respeta_max_steps():
+    fake = FakeMessagesListChatModel(responses=[
+        AIMessage(content="", tool_calls=[{"name": "web_search", "args": {"q": "x"}, "id": str(i)}])
+        for i in range(20)])
+    result = run_agent(fake, "pregunta")
+    assert result.steps <= 8                       # spec §8
+```
+
+```yaml
+# .github/workflows/ci.yml
+name: ci
+on: [pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt
+      - run: ruff check . && mypy src && pytest -q -m "not llm"
+```
+
+En la configuración del repositorio, activa **branch protection** en `main` y marca `checks` como **required status check**. Así ninguna PR se integra con tests rotos, aunque ODD haya cerrado la feature.
+
+### B.4 Capa 3: evals con el modelo real
+
+```makefile
+# Makefile
+evals:
+	AGENT_LLM_PROVIDER=ollama python evals/run_evals.py --agent $(AGENT) --runs 3 \
+	  --out evals/results/$(AGENT)-$$(date +%F).json
+```
+
+```bash
+make evals AGENT=research-agent
+```
+
+- Versiona los resultados en `evals/results/`, con el tag exacto del modelo y la versión de la spec.
+- Pega la tabla AC · resultado · umbral en el documento de feature y en la descripción de la PR.
+- Para el agente de seguridad, haz además de forma periódica una pasada con un modelo de referencia más grande: el modelo de 9B no basta como única medida.
+
+**Automatizarla con un self-hosted runner (opcional).** Registra tu Mac como self-hosted runner de GitHub Actions con la label `ollama` y añade un job que dependa de `checks`:
+
+```yaml
+  evals:
+    needs: checks
+    if: github.base_ref == 'main'
+    runs-on: [self-hosted, macOS, ollama]
+    steps:
+      - uses: actions/checkout@v4
+      - run: make evals AGENT=research-agent
+```
+
+Advertencia de seguridad: **solo en repositorios privados**. GitHub indica que los self-hosted runners casi nunca deberían usarse en repositorios públicos, porque cualquiera puede abrir una PR y ejecutar código en tu equipo. Los self-hosted runners no consumen minutos de GitHub Actions.
+
+### B.5 Integración con ODD
+
+Añade al `CLAUDE.md` del proyecto:
+
+```markdown
+- Antes de cerrar una feature: `pre-commit run --all-files` y `make evals AGENT=<agente>`.
+- Registra la tabla AC · resultado · umbral en el documento de feature; sin ella no se cierra.
+- Ningún merge a main sin el required check `checks` en verde.
+```
+
+| Momento de ODD | Capa de CI |
+| --- | --- |
+| 6. Cada commit de tarea | Capa 1 (pre-commit) |
+| 6. Cierre de slice / PR | Capa 2 (GitHub Actions) y, si el cambio afecta al comportamiento, capa 3 |
+| 7. Cerrar la feature | Tabla de evals de la capa 3 en el documento de feature |
+
+### B.6 Por dónde empezar
+
+| Fase | Qué montar | Cuándo |
+| --- | --- | --- |
+| Día 1 | Capas 1 y 2, branch protection con required check | Desde el primer agente |
+| Primer agente estable | Capa 3 manual con `make evals` y resultados versionados | Al tener la primera suite de evals |
+| Varios agentes | Self-hosted runner en el Mac (repo privado) y ejecución nocturna | Cuando lanzar las evals a mano deje de ser práctico |
 
 ---
 
@@ -636,3 +776,5 @@ Fija la etiqueta exacta del modelo en el resultado de cada ejecución: una actua
 - [Modelos Ollama por memoria disponible](https://www.morphllm.com/best-ollama-models)
 - [Function calling con modelos locales](https://insiderllm.com/guides/function-calling-local-llms/)
 - [LangChain: ChatOllama](https://reference.langchain.com/python/langchain-ollama/chat_models/ChatOllama)
+- [GitHub Actions: facturación y minutos](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
+- [GitHub Actions: uso seguro y self-hosted runners](https://docs.github.com/en/actions/reference/security/secure-use)
