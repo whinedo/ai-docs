@@ -39,6 +39,7 @@ Cada patrón sigue la misma ficha:
 
 - **Qué es:** una o dos frases.
 - **Cuándo aplicarlo** y **cuándo no:** las señales que lo justifican y las que indican que sobra.
+- **Se combina con:** patrones de cualquier familia que lo completan o que exige (resumen en el Anexo A).
 - **Detalle:** componentes, decisiones de diseño y riesgos.
 - **Diagrama:** el flujo o la secuencia del patrón.
 
@@ -76,6 +77,13 @@ flowchart TB
 
 **Cuándo no.** Si la tarea se resuelve solo con el conocimiento del modelo, sin datos ni acciones externas.
 
+**Se combina con.**
+
+- Memoria por capas (3.8) para el contexto
+- Guardrails (3.9) en cada tool
+- MCP (6.9) para exponer las tools
+- Lethal trifecta (7.1) al elegirlas
+
 **Detalle.**
 
 - Cada tool necesita nombre, descripción y esquema de parámetros claros. El LLM elige por la descripción, así que se diseña con el mismo cuidado que una API pública (Anthropic lo llama agent-computer interface).
@@ -98,6 +106,14 @@ flowchart LR
 **Cuándo aplicarlo.** Cuando los pasos dependen de lo que se va descubriendo: búsqueda, diagnóstico, navegación por un repositorio.
 
 **Cuándo no.** Si los pasos se conocen de antemano (usa un workflow), o si cada iteración es cara y el número de iteraciones no tiene límite.
+
+**Se combina con.**
+
+- Bounded autonomy (3.10), siempre
+- Memoria por capas (3.8) para que el contexto no crezca sin control
+- Guardrails de tool call (3.9)
+- Retry (6.6) e Idempotency key (6.2) en las tools
+- Tracing (6.10) para ver cada iteración
 
 **Detalle.**
 
@@ -163,6 +179,14 @@ return forced_final_answer(context)                # sin tools: lo que hay y lo 
 
 **Cuándo no.** Si el entorno cambia tanto que el plan queda obsoleto en cada paso (ReAct es más natural), o si la tarea tiene dos o tres pasos.
 
+**Se combina con.**
+
+- Human-in-the-loop (3.7) para aprobar el plan
+- Plan-then-execute (7.3), su versión de seguridad
+- Fan-out (5.1) para pasos independientes del plan
+- Routing (3.6) para planificar con un modelo potente y ejecutar con uno barato
+- Durable execution (6.1) en planes largos
+
 **Detalle.**
 
 - El plan es un artefacto: se guarda, se muestra al usuario y se puede aprobar (Human-in-the-loop).
@@ -188,6 +212,13 @@ flowchart TB
 
 **Cuándo no.** Si el evaluador no sabe distinguir bien de mal (solo añade coste), o si la latencia es crítica.
 
+**Se combina con.**
+
+- Bounded autonomy (3.10) para el máximo de iteraciones
+- Voting (5.3) como evaluador
+- Evals (8.1), que pueden compartir la rúbrica
+- Routing (3.6) para usar un evaluador barato
+
 **Detalle.**
 
 - El evaluador es más fiable si usa señales objetivas (tests, validación de esquema, compilación) que si solo opina otro LLM.
@@ -211,6 +242,14 @@ flowchart LR
 **Cuándo aplicarlo.** Cuando la tarea se descompone limpiamente en pasos conocidos (extraer, validar, redactar, traducir) y se quiere cambiar latencia por precisión.
 
 **Cuándo no.** Si los pasos dependen del contenido de forma imprevisible.
+
+**Se combina con.**
+
+- Guardrails (3.9) como gates
+- Retry (6.6) por paso
+- Durable execution (6.1) para guardar cada paso
+- Context minimization (7.5) entre pasos
+- Pipeline (4.6), su versión multiagente
 
 **Detalle.**
 
@@ -238,6 +277,14 @@ flowchart TB
 
 **Cuándo no.** Si las categorías no son separables o el router se equivoca más de lo que ahorra.
 
+**Se combina con.**
+
+- Circuit breaker (6.7) para desviar a un fallback
+- Bulkhead (6.8) con cupo por ruta
+- Human-in-the-loop (3.7) para lo ambiguo
+- Canary (8.3), que es un routing por porcentaje
+- Action-selector (7.4), un routing restringido
+
 **Detalle.**
 
 - La precisión del router se mide con su propia eval (matriz de confusión).
@@ -260,6 +307,14 @@ flowchart LR
 **Cuándo aplicarlo.** En acciones irreversibles o caras (pagos, borrados, envíos externos, cambios en producción) y cuando el nivel de riesgo de la spec lo exige.
 
 **Cuándo no.** En acciones de solo lectura o fácilmente reversibles: interrumpir de más entrena a las personas a aprobar sin leer.
+
+**Se combina con.**
+
+- Durable execution (6.1), imprescindible
+- Saga (6.3) para acciones no compensables
+- Plan-and-Execute (3.3) o Plan-then-execute (7.3) para aprobar el plan entero
+- Voting (5.3), que escala cuando hay desacuerdo
+- Bounded autonomy (3.10), que escala al agotar el presupuesto
 
 **Detalle.**
 
@@ -293,6 +348,14 @@ sequenceDiagram
 
 **Cuándo no.** En tareas de un solo turno.
 
+**Se combina con.**
+
+- Orchestrator-workers (4.1) con subagentes de contexto limpio
+- Map-reduce (5.2) para documentos grandes
+- Blackboard (4.5) como notas compartidas
+- Control optimista (5.6) si la memoria es compartida
+- Context minimization (7.5)
+
 **Detalle.**
 
 - **Compaction:** resumir el historial cuando se acerca al límite y seguir con el resumen.
@@ -318,6 +381,14 @@ flowchart TB
 **Cuándo aplicarlo.** Siempre que el agente reciba entradas de terceros o pueda actuar fuera de su proceso.
 
 **Cuándo no.** No se omiten. Lo que varía es cuántos y de qué tipo, según el riesgo.
+
+**Se combina con.**
+
+- Lethal trifecta (7.1): los guardrails no bastan por sí solos
+- Action-selector (7.4) y Plan-then-execute (7.3) como guardrails estructurales
+- Prompt chaining (3.5) como gates
+- Tracing (6.10) para registrar bloqueos
+- Evals (8.1) con casos de ataque
 
 **Detalle.**
 
@@ -347,6 +418,14 @@ flowchart LR
 **Cuándo aplicarlo.** En todos los agentes con bucle.
 
 **Cuándo no.** No hay excepción.
+
+**Se combina con.**
+
+- ReAct (3.2) y Evaluator-Optimizer (3.4), los bucles que limita
+- Group chat (4.4) como condición de fin
+- Human-in-the-loop (3.7) para escalar
+- Bulkhead (6.8) con presupuesto por agente
+- Tracing (6.10) para medir el gasto real
 
 **Detalle.**
 
@@ -380,6 +459,15 @@ stateDiagram-v2
 
 **Cuándo no.** Si las subtareas dependen mucho unas de otras o comparten decisiones de diseño, como escribir partes del mismo código.
 
+**Se combina con.**
+
+- Fan-out/fan-in (5.1) para la ejecución
+- Backpressure (5.7) para limitar workers
+- Memoria por capas (3.8): los workers devuelven resúmenes
+- Aislamiento del workspace (5.4) si los workers escriben
+- Bounded autonomy (3.10)
+- Tracing (6.10)
+
 **Detalle.**
 
 - Cada worker recibe un encargo completo: objetivo, formato de salida, tools permitidas y límites. Los encargos vagos generan trabajo duplicado.
@@ -406,6 +494,13 @@ flowchart TB
 
 **Cuándo no.** Cuando basta un nivel. Cada nivel añade latencia y una oportunidad más de perder información.
 
+**Se combina con.**
+
+- Orchestrator-workers (4.1) en cada nivel
+- A2A (6.9) entre equipos
+- Bulkhead (6.8) por equipo
+- Tracing (6.10) a través de los niveles
+
 **Detalle.**
 
 - Cada nivel solo ve los resúmenes del nivel inferior.
@@ -428,6 +523,14 @@ flowchart TB
 **Cuándo aplicarlo.** En atención a usuarios con áreas especializadas (triage que pasa a facturación o a soporte técnico), cuando la especialidad necesaria aparece durante la conversación.
 
 **Cuándo no.** Si hace falta combinar el trabajo de varios especialistas en una sola respuesta (usa Orchestrator-workers).
+
+**Se combina con.**
+
+- Routing (3.6): el triage es un router
+- Memoria por capas (3.8) para el resumen que viaja
+- Durable execution (6.1) para que la conversación sobreviva
+- Bounded autonomy (3.10) con un máximo de handoffs
+- A2A (6.9) si los agentes son de equipos distintos
 
 **Detalle.**
 
@@ -456,6 +559,13 @@ sequenceDiagram
 
 **Cuándo no.** En tareas de ejecución. Las conversaciones abiertas consumen muchos tokens y tienden a converger en lo que dice el primero.
 
+**Se combina con.**
+
+- Bounded autonomy (3.10) para limitar las rondas
+- Voting (5.3) para cerrar por votación
+- Human-in-the-loop (3.7) para la decisión final
+- Blackboard (4.5) como alternativa sin conversación
+
 **Detalle.**
 
 - Hace falta una condición de terminación explícita: número de rondas, consenso o decisión del moderador.
@@ -480,6 +590,13 @@ flowchart TB
 **Cuándo aplicarlo.** En problemas que se resuelven por aportaciones incrementales de especialistas sin un orden fijo: diagnóstico, investigación, análisis de incidentes.
 
 **Cuándo no.** Si el orden es conocido (usa Pipeline) o si no se puede controlar la concurrencia sobre la pizarra.
+
+**Se combina con.**
+
+- Lease (5.5) o Control optimista (5.6) sobre la pizarra
+- Memoria por capas (3.8)
+- Coreografía por eventos (6.5) para avisar de cambios
+- Tracing (6.10) con autor y versión de cada entrada
 
 **Detalle.**
 
@@ -506,6 +623,15 @@ flowchart TB
 **Cuándo aplicarlo.** En procesos con etapas claras y especialistas distintos: ingesta, clasificación, enriquecimiento, redacción, revisión.
 
 **Cuándo no.** Si las etapas necesitan volver atrás con frecuencia.
+
+**Se combina con.**
+
+- Prompt chaining (3.5), su versión de un solo agente
+- Coreografía por eventos (6.5) o colas entre etapas
+- Backpressure (5.7)
+- Outbox (6.4)
+- Retry con dead letter (6.6)
+- Map-reduce (5.2) dentro de una etapa
 
 **Detalle.**
 
@@ -534,6 +660,14 @@ Cuando varios agentes, o varias instancias del mismo, trabajan a la vez, aparece
 
 **Cuándo no.** Si las subtareas comparten estado que se modifica, o si el proveedor limita la concurrencia por debajo del paralelismo que se quiere.
 
+**Se combina con.**
+
+- Orchestrator-workers (4.1), que lo usa para ejecutar
+- Backpressure (5.7) y Bulkhead (6.8) para no saturar
+- Retry (6.6) por rama
+- Ejecución especulativa (5.8) para las ramas lentas
+- Voting (5.3), un fan-out sobre la misma entrada
+
 **Detalle.**
 
 - Define un timeout global y qué se hace con los resultados parciales: agregar lo que haya llegado y marcar lo que falta.
@@ -559,6 +693,14 @@ flowchart LR
 **Cuándo aplicarlo.** Para resumir o extraer información de corpus grandes, sobre todo con modelos locales de contexto limitado (por ejemplo, 16k en un Mac de 16 GB).
 
 **Cuándo no.** Si la respuesta depende de relaciones entre partes lejanas del documento: el map pierde esas relaciones.
+
+**Se combina con.**
+
+- Fan-out (5.1) para los map
+- Backpressure (5.7)
+- Memoria por capas (3.8)
+- Durable execution (6.1) en corpus grandes
+- Lethal trifecta (7.1): cada trozo aislado limita la prompt injection
 
 **Detalle.**
 
@@ -587,6 +729,13 @@ flowchart LR
 
 **Cuándo no.** En generación abierta (no hay mayoría clara) o con presupuesto ajustado.
 
+**Se combina con.**
+
+- Fan-out (5.1) para las ejecuciones
+- Human-in-the-loop (3.7) cuando hay desacuerdo
+- Evaluator-Optimizer (3.4) con el voto como evaluador
+- Routing (3.6) para votar solo en los casos de riesgo
+
 **Detalle.**
 
 - Se puede fijar un umbral: por ejemplo, marcar como vulnerable si 1 de 3 lo detecta (alta sensibilidad) o solo si lo detectan 2 de 3 (alta precisión).
@@ -612,6 +761,13 @@ flowchart LR
 
 **Cuándo no.** Si los cambios se solapan tanto que la integración cuesta más que hacerlos en serie.
 
+**Se combina con.**
+
+- Orchestrator-workers (4.1) cuando los workers escriben
+- Evals como quality gates (8.1) en cada PR
+- Control optimista (5.6) al integrar
+- Lease (5.5) para recursos que no se pueden clonar
+
 **Detalle.**
 
 - Convierte un problema de concurrencia en uno de merge, que ya sabemos resolver con git y CI.
@@ -635,6 +791,13 @@ flowchart LR
 **Cuándo aplicarlo.** Cuando solo un agente debe actuar a la vez sobre un recurso (un ticket, un despliegue, un fichero de estado) y los agentes pueden colgarse o tardar.
 
 **Cuándo no.** Si los conflictos son raros y se pueden resolver al escribir (usa Control optimista, 5.6).
+
+**Se combina con.**
+
+- Idempotency key (6.2) ante reintentos
+- Durable execution (6.1)
+- Blackboard (4.5)
+- Human-in-the-loop (3.7): liberar o renovar el lease mientras se espera una aprobación
 
 **Detalle.**
 
@@ -670,6 +833,13 @@ sequenceDiagram
 
 **Cuándo no.** Con mucha contención: los reintentos se encadenan y cada uno cuesta una llamada al LLM.
 
+**Se combina con.**
+
+- Blackboard (4.5) y Memoria por capas (3.8) compartida
+- ReAct (3.2): tras un conflicto, volver a razonar
+- Retry (6.6) con límite
+- Aislamiento del workspace (5.4)
+
 **Detalle.**
 
 - En HTTP: `ETag` con `If-Match`. En bases de datos: columna de versión. En git: el propio push rechazado.
@@ -700,6 +870,13 @@ sequenceDiagram
 
 **Cuándo no.** Con tareas aisladas y de bajo volumen.
 
+**Se combina con.**
+
+- Fan-out (5.1) y Pipeline (4.6), que lo necesitan
+- Retry (6.6) respetando `retry-after`
+- Circuit breaker (6.7)
+- Bulkhead (6.8)
+
 **Detalle.**
 
 - Respeta la cabecera `retry-after` cuando el proveedor la envía.
@@ -724,6 +901,13 @@ flowchart LR
 **Cuándo aplicarlo.** Cuando la latencia de cola importa más que el coste, en operaciones idempotentes y de solo lectura.
 
 **Cuándo no.** En acciones con efectos (se ejecutarían dos veces) o con presupuesto ajustado.
+
+**Se combina con.**
+
+- Idempotency key (6.2), obligatoria
+- Routing (3.6) para elegir los modelos
+- Circuit breaker (6.7)
+- Bulkhead (6.8) para acotar el coste extra
 
 **Detalle.**
 
@@ -767,6 +951,15 @@ Hay además una diferencia esencial: **el componente central no es determinista*
 
 **Cuándo no.** En agentes cortos, de una sola petición, que se pueden relanzar desde cero.
 
+**Se combina con.**
+
+- Human-in-the-loop (3.7)
+- Saga (6.3)
+- Idempotency key (6.2) para reanudar sin duplicar
+- Plan-and-Execute (3.3)
+- Handoff (4.3)
+- Lease (5.5)
+
 **Detalle.**
 
 - Herramientas: Temporal, Restate, AWS Step Functions o el checkpointing de LangGraph.
@@ -798,6 +991,14 @@ sequenceDiagram
 
 **Cuándo no.** En lecturas puras, que ya son idempotentes.
 
+**Se combina con.**
+
+- Retry (6.6)
+- Durable execution (6.1)
+- Ejecución especulativa (5.8)
+- Outbox (6.4) y Coreografía (6.5) en los consumidores
+- ReAct (3.2) cuando el LLM repite una tool call
+
 **Detalle.**
 
 - La clave la genera el código del agente a partir de la intención (por ejemplo, `ticket:<incidente>:<acción>`), no el LLM, que podría inventarla distinta cada vez.
@@ -823,6 +1024,13 @@ sequenceDiagram
 
 **Cuándo no.** Si todas las acciones caen en el mismo sistema transaccional.
 
+**Se combina con.**
+
+- Durable execution (6.1)
+- Idempotency key (6.2) en pasos y compensaciones
+- Human-in-the-loop (3.7) para los pasos no compensables
+- Plan-and-Execute (3.3) o Plan-then-execute (7.3) para fijar pasos y compensaciones antes de empezar
+
 **Detalle.**
 
 - Las compensaciones se definen en código y en la spec, no las improvisa el LLM en el momento del fallo.
@@ -846,6 +1054,13 @@ flowchart LR
 
 **Cuándo no.** Si no hay estado propio persistente o la pérdida ocasional de un evento es aceptable.
 
+**Se combina con.**
+
+- Idempotency key (6.2) en los consumidores
+- Coreografía por eventos (6.5)
+- Pipeline (4.6)
+- Blackboard (4.5) para avisar de cambios
+
 **Detalle.**
 
 - El relay entrega al menos una vez (at-least-once): los consumidores deben ser idempotentes (6.2).
@@ -867,6 +1082,14 @@ flowchart LR
 **Cuándo aplicar la coreografía.** Con agentes de equipos distintos y muy desacoplados, procesos que crecen añadiendo consumidores, o mucho volumen asíncrono.
 
 **Cuándo no.** Si hace falta ver y controlar el proceso de punta a punta, o con flujos con compensaciones complejas: ahí la orquestación es más fácil de razonar.
+
+**Se combina con.**
+
+- Outbox (6.4)
+- Idempotency key (6.2)
+- Tracing (6.10), imprescindible
+- Retry con dead letter (6.6)
+- Pipeline (4.6)
 
 **Detalle.**
 
@@ -893,6 +1116,14 @@ flowchart LR
 **Cuándo aplicarlo.** En todas las llamadas remotas: LLM, MCP, APIs.
 
 **Cuándo no.** Con errores permanentes (400, validación, permisos): reintentar solo gasta.
+
+**Se combina con.**
+
+- Idempotency key (6.2), imprescindible
+- Circuit breaker (6.7)
+- Backpressure (5.7)
+- Bounded autonomy (3.10): los reintentos cuentan en el presupuesto
+- Evaluator-Optimizer (3.4) para salidas que no cumplen el esquema
 
 **Detalle.**
 
@@ -921,6 +1152,15 @@ flowchart LR
 
 **Cuándo no.** Si no hay fallback y fallar rápido no aporta nada al usuario.
 
+**Se combina con.**
+
+- Routing (3.6) hacia el fallback
+- Retry (6.6)
+- Bulkhead (6.8)
+- Evals (8.1) también del modelo fallback
+- Canary (8.3) como kill switch automático
+- Tracing (6.10)
+
 **Detalle.**
 
 - El fallback debe estar evaluado: un modelo local (por ejemplo, qwen3.5:9b en Ollama) pasa las mismas evals con su propio umbral.
@@ -947,6 +1187,13 @@ stateDiagram-v2
 
 **Cuándo no.** Con un solo agente y poco volumen.
 
+**Se combina con.**
+
+- Bounded autonomy (3.10) con presupuesto por compartimento
+- Backpressure (5.7)
+- Circuit breaker (6.7)
+- Jerárquico (4.2) con un compartimento por equipo
+
 **Detalle.**
 
 - Usa claves de API o workspaces separados por agente: así también se mide el coste de cada uno.
@@ -972,6 +1219,14 @@ flowchart TB
 
 **Cuándo no.** A2A no compensa entre agentes del mismo proceso y del mismo equipo: una llamada de función es más sencilla.
 
+**Se combina con.**
+
+- Guardrails (3.9) en las tools MCP
+- Lethal trifecta (7.1): lo que devuelve otro agente no es confiable
+- Retry (6.6) y Circuit breaker (6.7) hacia agentes remotos
+- Tracing (6.10) con propagación de contexto
+- Jerárquico (4.2) y Handoff (4.3) entre equipos
+
 **Detalle.**
 
 - En A2A, cada agente publica una **Agent Card** con sus capacidades, su endpoint y su autenticación. Las tareas tienen ciclo de vida (enviada, en curso, requiere entrada, completada, fallida) y admiten streaming y notificaciones.
@@ -996,6 +1251,13 @@ flowchart LR
 **Cuándo aplicarlo.** Desde el primer agente que salga de tu portátil, y siempre en sistemas multiagente.
 
 **Cuándo no.** No hay excepción en producción.
+
+**Se combina con.**
+
+- Evals (8.1): las trazas son la fuente de casos
+- Shadow mode (8.2) y Canary (8.3) para comparar
+- Bounded autonomy (3.10) para medir el coste real
+- Coreografía (6.5), que sin trazas no se puede depurar
 
 **Detalle.**
 
@@ -1027,6 +1289,14 @@ flowchart TB
 
 **Cuándo no.** Siempre aplica.
 
+**Se combina con.**
+
+- Dual LLM (7.2), Plan-then-execute (7.3), Action-selector (7.4) o Context minimization (7.5) para romper el triángulo
+- Map-reduce (5.2) para aislar el contenido
+- Orchestrator-workers (4.1) para repartir capacidades entre agentes
+- Human-in-the-loop (3.7) en el canal de salida
+- Guardrails de salida (3.9)
+
 **Detalle.**
 
 - Enumera en la spec las tools de cada agente y marca cuál aporta cada lado del triángulo.
@@ -1048,6 +1318,13 @@ flowchart LR
 **Cuándo aplicarlo.** Cuando el agente debe procesar contenido no confiable (correos, páginas web) y además ejecutar acciones.
 
 **Cuándo no.** Si el agente necesita razonar sobre el contenido para decidir la siguiente acción: este patrón lo impide por diseño.
+
+**Se combina con.**
+
+- Lethal trifecta (7.1)
+- Prompt chaining (3.5): el controlador sigue pasos fijos
+- Map-reduce (5.2) para la cuarentena por trozos
+- Guardrails (3.9) para validar el JSON de la cuarentena
 
 **Detalle.**
 
@@ -1074,6 +1351,13 @@ flowchart TB
 
 **Cuándo no.** Si el plan depende del contenido.
 
+**Se combina con.**
+
+- Plan-and-Execute (3.3) sin replanificar tras leer contenido externo
+- Human-in-the-loop (3.7) para aprobar el plan
+- Guardrails de tool call (3.9) con el plan como allowlist
+- Saga (6.3) para planes con compensaciones
+
 **Detalle.**
 
 - Sigue siendo posible manipular los parámetros (por ejemplo, el contenido del resumen), pero no añadir un "reenvía todo a esta dirección".
@@ -1095,6 +1379,13 @@ flowchart LR
 **Cuándo aplicarlo.** En asistentes que traducen una petición en lenguaje natural a una acción conocida: un menú inteligente, un router de comandos.
 
 **Cuándo no.** Si se necesitan varios pasos encadenados o razonar sobre resultados.
+
+**Se combina con.**
+
+- Routing (3.6)
+- Guardrails (3.9)
+- Human-in-the-loop (3.7) como una de las acciones
+- Idempotency key (6.2) en las acciones con efectos
 
 **Detalle.**
 
@@ -1120,6 +1411,13 @@ flowchart LR
 
 **Cuándo no.** Si el texto original hace falta para responder bien.
 
+**Se combina con.**
+
+- Prompt chaining (3.5)
+- Memoria por capas (3.8)
+- Map-reduce (5.2)
+- Guardrails (3.9) para validar la consulta extraída
+
 **Detalle.**
 
 - Combínalo con Map-reduce (5.2) cuando el contenido no confiable sea un corpus: cada trozo se procesa aislado.
@@ -1144,6 +1442,13 @@ flowchart TB
 
 **Cuándo aplicarlo.** Siempre. Es la red de seguridad que permite cambiar de patrón o de modelo con datos.
 
+**Se combina con.**
+
+- Tracing (6.10) como fuente de casos
+- Shadow mode (8.2) y Canary (8.3), los pasos siguientes
+- Evaluator-Optimizer (3.4), que comparte rúbrica
+- Bounded autonomy (3.10) y ReAct (3.2) con casos de bucle
+
 **Detalle.**
 
 - Las evals miden también lo que añade cada patrón: si un Evaluator-Optimizer no mejora la puntuación de su AC, se elimina.
@@ -1167,6 +1472,13 @@ flowchart TB
 
 **Cuándo no.** Si las tools del agente tienen efectos que no se pueden simular (hace falta un modo dry-run).
 
+**Se combina con.**
+
+- Tools en modo dry-run con Idempotency key (6.2)
+- Tracing (6.10) para comparar
+- Evals (8.1) con los desacuerdos
+- Canary (8.3) como siguiente paso
+
 **Detalle.**
 
 - Las tools con efectos se sustituyen por versiones dry-run que registran lo que habrían hecho.
@@ -1187,6 +1499,13 @@ flowchart LR
 **Qué es.** La versión nueva recibe un porcentaje pequeño del tráfico, que se amplía si las métricas son buenas. Un kill switch permite desactivar el agente o una tool al instante sin desplegar.
 
 **Cuándo aplicarlo.** En cualquier cambio de modelo, prompt o tool de un agente en producción.
+
+**Se combina con.**
+
+- Routing (3.6) por porcentaje
+- Circuit breaker (6.7) como kill switch automático
+- Tracing (6.10) para las métricas
+- Evals (8.1) antes de empezar
 
 **Detalle.**
 
@@ -1266,6 +1585,125 @@ Elegir un patrón es una decisión de diseño, y en ODD las decisiones quedan es
 5. **Riesgo:** los patrones de seguridad y Human-in-the-loop son obligatorios en agentes de riesgo alto, y su cumplimiento forma parte de la revisión RDD.
 
 Detalles en las guías "ODD aplicado a la generación de agentes", "RDD en el ciclo ODD" y "CI para agentes y PoCs".
+
+---
+
+## Anexo A. Combinaciones de patrones
+
+**Conclusión:** un agente real nunca usa un solo patrón. Las familias (comportamiento, coordinación, concurrencia, sistemas distribuidos, seguridad, operación) sirven para ordenar el catálogo, pero el diseño se hace combinándolas: un ReAct que hace tool calls con efectos necesita Bounded autonomy (comportamiento), Idempotency key y Retry (distribuidos) y, si lee contenido externo, un patrón de seguridad. Cada ficha del catálogo tiene su apartado "Se combina con". Este anexo recoge las combinaciones más importantes.
+
+### A.1 Combinaciones obligatorias
+
+Si usas el patrón de la izquierda, añade el de la derecha. Sin él, el primero tiene un modo de fallo conocido.
+
+| Si usas | Añade | Porque, si no |
+| --- | --- | --- |
+| ReAct (3.2), Evaluator-Optimizer (3.4) o Group chat (4.4) | Bounded autonomy (3.10) | El bucle puede no terminar |
+| Retry (6.6) sobre acciones con efectos | Idempotency key (6.2) | Se duplican correos, tickets o pagos |
+| Ejecución especulativa (5.8) | Idempotency key (6.2) | La acción se ejecuta dos veces |
+| Human-in-the-loop (3.7) | Durable execution (6.1) | El estado se pierde mientras se espera la aprobación |
+| Saga (6.3) | Durable execution (6.1) e Idempotency key (6.2) | Una caída a mitad de la compensación deja datos inconsistentes |
+| Fan-out (5.1) u Orchestrator-workers (4.1) | Backpressure (5.7) | El proveedor responde con 429 y fallan todas las ramas |
+| Blackboard (4.5) o memoria compartida (3.8) | Lease (5.5) o Control optimista (5.6) | Se pierden escrituras |
+| Coreografía por eventos (6.5) u Outbox (6.4) | Idempotency key (6.2) y Tracing (6.10) | Eventos duplicados y un flujo que no se puede depurar |
+| Circuit breaker con fallback (6.7) | Evals (8.1) del modelo fallback | La degradación pasa desapercibida |
+| Datos privados + contenido no confiable + canal de salida (7.1) | Dual LLM (7.2), Plan-then-execute (7.3), Action-selector (7.4) o Context minimization (7.5) | Exfiltración de datos por prompt injection |
+| Cualquier agente que vaya a producción | Tracing (6.10), Evals (8.1) y Canary con kill switch (8.3) | No hay forma de saber si funciona ni de pararlo |
+
+### A.2 Mapa de dependencias entre familias
+
+Las flechas indican "necesita". La mayoría de las dependencias cruzan de familia.
+
+```mermaid
+flowchart LR
+  subgraph COMP["Comportamiento"]
+    RE["ReAct"]
+    HI["Human-in-the-loop"]
+    BA["Bounded autonomy"]
+  end
+  subgraph COOR["Coordinación"]
+    OW["Orchestrator-workers"]
+    BB["Blackboard"]
+  end
+  subgraph CONC["Concurrencia"]
+    FO["Fan-out"]
+    BP["Backpressure"]
+    LO["Lease / optimista"]
+  end
+  subgraph DIST["Sistemas distribuidos"]
+    DE["Durable execution"]
+    IK["Idempotency key"]
+    RT["Retry"]
+  end
+  subgraph SEG["Seguridad"]
+    LT["Lethal trifecta"]
+    DL["Dual LLM / Plan-then-execute"]
+  end
+  RE --> BA
+  RE --> RT
+  RT --> IK
+  HI --> DE
+  DE --> IK
+  OW --> FO
+  FO --> BP
+  BB --> LO
+  RE -. "lee contenido externo" .-> LT
+  LT --> DL
+```
+
+### A.3 Combinaciones habituales
+
+Ocho recetas de partida que mezclan familias. Son un punto de partida, no un diseño cerrado: cada patrón se añade solo si una eval o un requisito lo justifica.
+
+| Caso | Combinación | Familias |
+| --- | --- | --- |
+| **Agente de research** | Orchestrator-workers + Fan-out + Backpressure + Memoria por capas + Map-reduce + Bounded autonomy + Lethal trifecta (la web no es confiable) | Coordinación, concurrencia, comportamiento, seguridad |
+| **Agente con acciones de negocio** (tickets, pagos, cambios) | ReAct + Bounded autonomy + Guardrails + Human-in-the-loop + Durable execution + Idempotency key + Saga | Comportamiento, distribuidos |
+| **Asistente sobre correo o documentos** | Plan-then-execute o Dual LLM + Context minimization + Guardrails de salida + Human-in-the-loop para enviar | Seguridad, comportamiento |
+| **Pipeline documental a escala** | Pipeline + Coreografía por eventos + Outbox + Idempotency key + Retry con dead letter + Backpressure + Map-reduce + Tracing | Coordinación, distribuidos, concurrencia |
+| **Varios agentes de desarrollo en paralelo** (Claude Code) | Orchestrator-workers + Aislamiento del workspace (worktrees) + Control optimista al integrar + Blackboard (Engram) + Evals como quality gates | Coordinación, concurrencia, operación |
+| **Agente crítico con proveedor externo** | Routing + Circuit breaker con fallback local + Retry + Bulkhead + Evals + Shadow mode + Canary con kill switch | Comportamiento, distribuidos, operación |
+| **Atención al cliente** | Routing (triage) + Handoff + Memoria por capas + Durable execution + Guardrails + Human-in-the-loop | Comportamiento, coordinación, distribuidos |
+| **Agente de control de seguridad** | Fan-out (un control por rama) + Voting en hallazgos críticos + Evaluator-Optimizer + Human-in-the-loop + Tracing | Concurrencia, comportamiento, distribuidos |
+
+Ejemplo de la receta "Agente con acciones de negocio": cada patrón cubre un fallo distinto.
+
+```mermaid
+flowchart TB
+  U["Petición"] --> G1["Guardrail de entrada"]
+  G1 --> R["Bucle ReAct"]
+  R --> BA{"Bounded autonomy<br/>¿presupuesto?"}
+  BA -- "agotado" --> ESC["Escalar con<br/>resultado parcial"]
+  BA -- "ok" --> T{"¿Acción con efectos?"}
+  T -- "no, lectura" --> TOOL["Tool con Retry"]
+  T -- "sí" --> HI["Human-in-the-loop<br/>aprobación"]
+  HI --> SG["Saga: paso con<br/>Idempotency key"]
+  SG --> DE[("Durable execution<br/>registro de pasos")]
+  TOOL --> R
+  DE --> R
+```
+
+### A.4 Tensiones e incompatibilidades
+
+Algunas combinaciones se estorban. Si aparecen juntas, hay que decidir cuál manda.
+
+| Combinación | Tensión | Cómo se resuelve |
+| --- | --- | --- |
+| Dual LLM (7.2) + ReAct que razona sobre el contenido (3.2) | El LLM privilegiado no puede ver el contenido que necesitaría para decidir | Separar en dos agentes, o aceptar Plan-then-execute (7.3) con parámetros acotados |
+| Action-selector (7.4) + tareas de varios pasos | El selector no encadena pasos | Usar Plan-then-execute (7.3) |
+| Ejecución especulativa (5.8) + acciones con efectos | Doble ejecución | Solo en lecturas, o con Idempotency key (6.2) |
+| Coreografía (6.5) + Saga compleja (6.3) | Las compensaciones repartidas son difíciles de seguir | Orquestar la saga con Durable execution (6.1) |
+| Context minimization (7.5) + Handoff con historial completo (4.3) | El handoff vuelve a meter el texto que se quería eliminar | Handoff con resumen estructurado |
+| Lease (5.5) + pasos de LLM o aprobaciones largas | El lease caduca a mitad del paso | Renovar el lease, o liberarlo y usar Control optimista (5.6) |
+| Voting (5.3) o Evaluator-Optimizer (3.4) + latencia estricta | Multiplican llamadas y tiempo | Activarlos solo en los casos de riesgo, con Routing (3.6) |
+| Group chat (4.4) + presupuesto ajustado | Cada ronda la pagan todos los participantes | Blackboard (4.5) o un solo revisor con rúbrica |
+
+### A.5 Cómo usarlo en la spec
+
+1. Elige la forma con la escalera de complejidad (2.1) y el árbol de la sección 10.
+2. Repasa la tabla A.1 para cada patrón elegido y añade los que falten.
+3. Comprueba la tabla A.4: si hay una tensión, deja escrita en la spec la decisión y el motivo.
+4. Cada patrón añadido tiene su AC y su eval o test (sección 11).
 
 ---
 
