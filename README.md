@@ -28,6 +28,7 @@ ai-docs/
 | **RDD en el ciclo ODD - guía para arquitectos** | Receipt-Driven Development: revisión independiente basada en riesgo (passive, low, medium, high), candidato congelado, lenses, corrección acotada y cómo encaja en el ciclo ODD. | [MD](md/RDD%20en%20el%20ciclo%20ODD%20-%20gu%C3%ADa%20para%20arquitectos.md) · [PDF](pdf/RDD%20en%20el%20ciclo%20ODD%20-%20gu%C3%ADa%20para%20arquitectos.pdf) |
 | **CI para agentes y PoCs - guía práctica** | Paso a paso de las tres capas de CI para agentes: pre-commit, GitHub Actions con LLM fake y evals con modelo real (local con Ollama). Pensada para PoCs y agentes propios. | [MD](md/CI%20para%20agentes%20y%20PoCs%20-%20gu%C3%ADa%20pr%C3%A1ctica.md) · [PDF](pdf/CI%20para%20agentes%20y%20PoCs%20-%20gu%C3%ADa%20pr%C3%A1ctica.pdf) |
 | **Worktrees en Claude Code - guía para arquitectos** | Cómo aislar el trabajo de varias sesiones de Claude Code con worktrees: cuándo usarlos, `.worktreeinclude`, `worktree.baseRef`, integración por PR y limpieza. | [MD](md/Worktrees%20en%20Claude%20Code%20-%20gu%C3%ADa%20para%20arquitectos.md) · [PDF](pdf/Worktrees%20en%20Claude%20Code%20-%20gu%C3%ADa%20para%20arquitectos.pdf) |
+| **Sandbox de seguridad para agentes - guía para arquitectos** | Cómo montar en el equipo local un sandbox para evaluar la seguridad de agentes: modelo de amenazas (OWASP Top 10 for Agentic Applications), contenedores endurecidos en red sin salida, proxy con allowlist por host, método y ruta, mundo falso determinista (búsqueda, web y pares A2A), canarios, modos de contención y de protecciones de red, catálogo de ataques, integración en ODD con `make security` y gobierno para llevarlo a CI y a la plataforma. | [MD](md/Sandbox%20de%20seguridad%20para%20agentes%20-%20gu%C3%ADa%20para%20arquitectos.md) · [PDF](pdf/Sandbox%20de%20seguridad%20para%20agentes%20-%20gu%C3%ADa%20para%20arquitectos.pdf) |
 
 ## Por dónde empezar
 
@@ -40,6 +41,7 @@ ai-docs/
 | Trabajas con varias sesiones de Claude Code a la vez | Worktrees en Claude Code → patrón Aislamiento del workspace (5.4) |
 | Quieres gastar menos cupo de Claude | ODD aplicado a la generación de agentes, Anexo C (Ahorro de costes) |
 | El agente va a producción | RDD en el ciclo ODD → Patrones, secciones 6 a 8 (sistemas distribuidos, seguridad, operación) |
+| Tu agente lee contenido no confiable y quieres probar su seguridad antes del merge | Sandbox de seguridad para agentes → A2A (Agent2Agent), sección 10 → RDD en el ciclo ODD |
 
 ## Documentos anteriores
 
@@ -58,4 +60,4 @@ Se conservan como referencia. Su contenido está superado por las guías anterio
 - **Actualización:** se edita el Markdown y se regenera el PDF con el mismo nombre. Las dos versiones de una guía se actualizan en el mismo commit.
 - **Cheatsheet:** sus diagramas son imágenes PNG enlazadas desde `md/img/`, porque Obsidian y GitHub no dibujan Mermaid dentro de una celda de tabla. La carpeta tiene que estar junto al Markdown.
 
-*Última actualización: 31 de octubre de 2026.*
+*Última actualización: 2 de noviembre de 2026.*
