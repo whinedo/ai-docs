@@ -1,6 +1,33 @@
 # Patrones aplicados al desarrollo de agentes · Cheatsheet
 
-Resumen de los 42 patrones de la guía "Patrones aplicados al desarrollo de agentes". El número indica la sección de la guía con el detalle completo. Regla general: empieza por lo más simple (llamada única → workflow → agente → multiagente) y sube solo cuando la eval lo justifique.
+*Resumen de los 42 patrones de la guía para arquitectos empresariales y de soluciones*
+
+9 de noviembre de 2026 · @whinedo · Hector Gracia de Azcoitia
+
+**Licencia:** [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es). Detalles, contenido de terceros y aviso de responsabilidad en la sección «Licencia y avisos», al final del documento.
+
+## Índice
+
+- [Resumen](#resumen)
+- Patrones
+  - [Comportamiento](#comportamiento): un solo agente (§3)
+  - [Coordinación](#coordinación): varios agentes (§4)
+  - [Concurrencia](#concurrencia): trabajo a la vez (§5)
+  - [Sistemas distribuidos](#sistemas-distribuidos): fallos parciales (§6)
+  - [Seguridad](#seguridad): defensa frente a la prompt injection (§7)
+  - [Operación](#operación): puesta en producción (§8)
+- [Sobre la autoría](#sobre-la-autoría)
+- [Licencia y avisos](#licencia-y-avisos)
+
+## Resumen
+
+Este cheatsheet condensa en una sola consulta los 42 patrones de la guía «Patrones aplicados al desarrollo de agentes». Para cada patrón recoge su diagrama y la señal que indica cuándo aplicarlo, agrupados en seis familias: comportamiento de un agente, coordinación entre agentes, concurrencia, sistemas distribuidos, seguridad frente a la prompt injection y operación en producción.
+
+La idea que lo recorre es que un agente es un sistema distribuido con un componente no determinista en el centro. Por eso conviven los patrones clásicos (retry, idempotency key, saga, circuit breaker) con otros propios del LLM. La regla general es empezar por lo más simple (llamada única → workflow → agente → multiagente) y subir solo cuando la eval lo justifique.
+
+El número de cada fila (§3.1, §4.2…) remite a la sección de la guía con el detalle completo. La columna «Cuándo aplicarlo» sirve como primer filtro, no como sustituto del análisis de compromisos de la guía.
+
+**Palabras clave:** agentes de IA, patrones de diseño, arquitectura de agentes, multiagente, sistemas distribuidos, prompt injection, evals.
 
 ## Comportamiento
 
@@ -85,3 +112,28 @@ Cómo se pone en producción con confianza.
 | **Evals como quality gates**<br>§8.1 | ![Evals como quality gates](img/40-evals.png) | Siempre: cualquier cambio de prompt, modelo, tool o patrón. |
 | **Shadow mode**<br>§8.2 | ![Shadow mode](img/41-shadow.png) | Antes de sustituir un proceso existente o cambiar de modelo en un agente crítico. |
 | **Canary con kill switch**<br>§8.3 | ![Canary con kill switch](img/42-canary.png) | Cualquier cambio de modelo, prompt o tool en un agente en producción. |
+
+## Sobre la autoría
+
+**Autor:** Hector Gracia de Azcoitia (@whinedo).
+
+## Licencia y avisos
+
+### Licencia
+
+© 2026 Hector Gracia de Azcoitia. Este documento se distribuye bajo la licencia Creative Commons Atribución-CompartirIgual 4.0 Internacional ([CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.es)). Puedes copiarlo, redistribuirlo y adaptarlo para cualquier fin, también comercial, con dos condiciones:
+
+- **Atribución:** reconocer la autoría, enlazar la licencia e indicar si has hecho cambios.
+- **Compartir igual:** distribuir tus adaptaciones con esta misma licencia.
+
+Atribución sugerida: «Patrones aplicados al desarrollo de agentes · Cheatsheet», de Hector Gracia de Azcoitia, licencia CC BY-SA 4.0.
+
+### Contenido de terceros
+
+- Los patrones se describen con palabras propias a partir de la guía «Patrones aplicados al desarrollo de agentes» y de las fuentes que esta cita; esas fuentes conservan sus propios derechos y no quedan cubiertas por esta licencia.
+- Los nombres de patrones, protocolos (MCP, A2A) y marcos se mencionan por su nombre; sus especificaciones pertenecen a sus editores.
+- Las marcas y nombres de productos pertenecen a sus titulares. Su mención no implica afiliación ni respaldo.
+
+### Aviso de responsabilidad
+
+Este cheatsheet tiene fines formativos y divulgativos. Su contenido es orientativo, puede contener errores y no sustituye el detalle de la guía ni una evaluación profesional de la arquitectura. Las herramientas, protocolos y prácticas citados cambian con rapidez, así que conviene verificar su estado antes de aplicar cualquier recomendación. El autor no se responsabiliza de las decisiones tomadas a partir de este documento.
