@@ -66,6 +66,12 @@ Guía para arquitectos empresariales y de soluciones · Comportamiento, coordina
   - [A.3 Combinaciones habituales](#a3-combinaciones-habituales)
   - [A.4 Tensiones e incompatibilidades](#a4-tensiones-e-incompatibilidades)
   - [A.5 Cómo usarlo en la spec](#a5-cómo-usarlo-en-la-spec)
+- [Anexo B. Los hooks como capa de control de los patrones](#anexo-b-los-hooks-como-capa-de-control-de-los-patrones)
+  - [B.1 Dónde se enganchan](#b1-dónde-se-enganchan)
+  - [B.2 Qué patrón implementa cada hook](#b2-qué-patrón-implementa-cada-hook)
+  - [B.3 Ejemplo: confirmar las acciones irreversibles](#b3-ejemplo-confirmar-las-acciones-irreversibles)
+  - [B.4 Qué no resuelven los hooks](#b4-qué-no-resuelven-los-hooks)
+  - [B.5 Cómo usarlo en la spec](#b5-cómo-usarlo-en-la-spec)
 - [12. Lecturas recomendadas](#12-lecturas-recomendadas)
   - [Imprescindibles](#imprescindibles)
   - [Catálogos de patrones](#catálogos-de-patrones)
@@ -1997,6 +2003,70 @@ Algunas combinaciones se estorban. Si aparecen juntas, hay que decidir cuál man
 2. Repasa la tabla A.1 para cada patrón elegido y añade los que falten.
 3. Comprueba la tabla A.4: si hay una tensión, deja escrita en la spec la decisión y el motivo.
 4. Cada patrón añadido tiene su AC y su eval o test (sección 11).
+
+---
+
+## Anexo B. Los hooks como capa de control de los patrones
+
+**Conclusión:** varios patrones del catálogo (Guardrails, Human-in-the-loop, Bounded autonomy, Lethal trifecta, Tracing, Evals) dependen de que una regla se cumpla siempre. Una instrucción en el prompt o en `CLAUDE.md` no lo garantiza, porque el modelo decide si la sigue. Un **hook** es código determinista que el entorno ejecuta en un punto fijo del ciclo del agente, decida lo que decida el modelo. En Claude Code es donde estos patrones dejan de ser una recomendación y pasan a ser una regla ejecutable. El detalle de eventos, contrato y configuración está en la guía "Hooks aplicados a la IA".
+
+### B.1 Dónde se enganchan
+
+Los hooks de Claude Code se disparan en eventos del ciclo de vida. Los cuatro que más se usan para implementar patrones son `UserPromptSubmit`, `PreToolUse` (puede bloquear la llamada), `PostToolUse` (reacciona, pero no puede deshacer la acción) y `Stop` (puede impedir que el agente termine). Cada uno de ellos es un punto natural para un patrón.
+
+```mermaid
+flowchart TB
+  U["Entrada del usuario"] -- "(1)" --> H1["UserPromptSubmit<br/>guardrail de entrada"]
+  H1 -- "(2)" --> AG["Agente"]
+  AG -- "(3) tool call" --> H2{"PreToolUse<br/>guardrail, HITL, límites"}
+  H2 -- "(4) deniega o pide confirmación" --> AG
+  H2 -- "(4) permite" --> T["Tool"]
+  T -- "(5)" --> H3["PostToolUse<br/>tracing, formato, checks"]
+  H3 -- "(6) vuelve a 3" --> AG
+  AG -- "(3) termina" --> H4{"Stop<br/>evals, tests"}
+  H4 -- "(4) falta trabajo" --> AG
+  H4 -- "(4) ok" --> OUT["Respuesta"]
+```
+
+### B.2 Qué patrón implementa cada hook
+
+| Patrón del catálogo | Evento | Cómo lo implementa el hook |
+| --- | --- | --- |
+| Guardrails (3.9) | `PreToolUse` | Valida los argumentos de cada tool con efectos: rutas protegidas, destinatarios, importes. Sale con código 2 y un mensaje que el agente puede usar para corregir su plan |
+| Human-in-the-loop (3.7) | `PreToolUse` | Devuelve `ask` para las acciones irreversibles (borrar, desplegar, enviar), de modo que la decisión pasa a una persona |
+| Bounded autonomy (3.10) | `PreToolUse` | Cuenta las llamadas o el tiempo por sesión (con el `session_id` del evento) y deniega al superar el límite |
+| Lethal trifecta (7.1) | `PreToolUse` | Deniega las tools con salida al exterior (por ejemplo `WebFetch` o `curl`) en repositorios con datos sensibles, con lo que se elimina una de las tres patas |
+| Tracing distribuido (6.10) | `PostToolUse` | Un hook `http` envía cada evento con su `session_id` a un colector central |
+| Evals como quality gates (8.1) | `Stop` | Ejecuta los tests o las evals antes de dejar terminar; si fallan, devuelve el motivo y el agente sigue trabajando |
+| Memoria por capas (3.8) | `SessionStart` | Con el matcher `compact`, reinyecta las normas clave tras la compactación del contexto |
+
+La misma idea se aplica fuera de Claude Code: otros frameworks ofrecen interceptores o middleware en los mismos puntos (antes y después de la tool call, al terminar). Lo que cambia es el nombre, no el patrón.
+
+### B.3 Ejemplo: confirmar las acciones irreversibles
+
+Un hook `PreToolUse` sobre `Bash` que pide confirmación humana cuando el comando es destructivo. El hook lee el JSON del evento por stdin y responde con una decisión estructurada:
+
+```json
+{ "hookSpecificOutput": { "hookEventName": "PreToolUse",
+    "permissionDecision": "ask",
+    "permissionDecisionReason": "Comando destructivo: requiere confirmación" } }
+```
+
+Con `ask` la persona decide en cada caso (Human-in-the-loop); con `deny` el agente recibe el motivo y replantea (Guardrails). Se elige según el riesgo: `ask` para lo reversible con coste, `deny` para lo prohibido.
+
+### B.4 Qué no resuelven los hooks
+
+- **No sustituyen a los patrones estructurales de seguridad (sección 7).** Un hook valida una llamada concreta; Dual LLM, Plan-then-execute o Action-selector cambian la arquitectura para que la inyección no pueda causar daño. Son capas complementarias.
+- **`PostToolUse` no puede deshacer** lo que la tool ya ha hecho. Las reglas que deben impedir una acción van en `PreToolUse`.
+- **La cobertura depende del matcher.** Un matcher sobre `Edit|Write` no ve lo que escribe un comando de shell: se cubre con un matcher sobre `Bash` o con un `Stop` que revise los cambios del repositorio.
+- **Fallan en abierto.** Salvo el código de salida 2 (o `deny` en la salida estructurada), un error del propio hook deja continuar la acción. Los hooks de seguridad bloquean de forma explícita.
+- **Corren con los privilegios del usuario.** Un hook es código: se versiona, se revisa en PR y se prueba como un script de CI. Su entrada (rutas, comandos) la genera el modelo y no es de confianza.
+
+### B.5 Cómo usarlo en la spec
+
+1. Para cada patrón obligatorio de la tabla A.1 que sea una regla sin excepciones, decide si se implementa como hook o como lógica de la aplicación.
+2. Anota en la spec el evento, el matcher y la decisión (`deny`, `ask`) de cada hook.
+3. Cada hook tiene su AC y su test: se ejecuta con un JSON de ejemplo y se comprueba el código de salida y el mensaje (sección 11).
 
 ---
 
