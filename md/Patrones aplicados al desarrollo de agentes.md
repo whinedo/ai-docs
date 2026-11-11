@@ -1871,6 +1871,30 @@ Después de elegir la forma, se añaden los patrones transversales según las ca
 | Cruza equipos u organizaciones | A2A, tracing distribuido |
 | Va a producción | Evals, Shadow mode, Canary con kill switch |
 
+**Diagrama ampliado.** El mismo árbol de decisión con los 42 patrones del catálogo: primero se elige la forma (llamada, workflow, agente único o multiagente), después los patrones que se aplican siempre y por último los transversales según las características de la tarea.
+
+```mermaid
+%%{init: {"flowchart": {"nodeSpacing": 10, "rankSpacing": 12, "padding": 4, "curve": "basis", "wrappingWidth": 900}}}%%
+flowchart TB
+  subgraph FORMA["Paso 1: elegir la forma (la más simple que funcione)"]
+    direction TB
+  Q1("¿Basta una llamada con buen prompt?") -- "(1) sí" --> R1["Llamada única<br/>(Augmented LLM)"]
+  Q1 -- "(1) no" --> Q2("¿Los pasos se conocen de antemano?")
+  Q2 -- "(2) sí" --> R2["<b>Workflow</b>, según la forma:<br/>categorías distintas: Routing<br/>pasos en cadena: Prompt chaining con gates<br/>hay que pulir: Evaluator-Optimizer<br/>partes independientes: Fan-out / fan-in<br/>(Map-reduce si el corpus es grande;<br/>Voting si la decisión es crítica)"]
+  Q2 -- "(2) no" --> Q3("¿Cabe en un contexto y es<br/>una sola línea de trabajo?")
+  Q3 -- "(3) sí" --> R3["<b>Agente único</b><br/>entorno cambiante: ReAct<br/>plan estable: Plan-and-Execute"]
+  Q3 -- "(3) no" --> Q4("¿Subtareas independientes?")
+  Q4 -- "(4) no" --> R4["<b>Agente único</b> con<br/>Memoria por capas,<br/>o Pipeline secuencial"]
+  Q4 -- "(4) sí" --> R5["<b>Multiagente</b>, según el reparto:<br/>un supervisor: Orchestrator-workers<br/>demasiados workers: Jerárquico<br/>la especialidad surge en la charla: Handoff<br/>varios puntos de vista: Group chat y debate<br/>aportan sin orden fijo: Blackboard"]
+  end
+  FORMA --> BASE
+  BASE["<b>Siempre</b>, sea cual sea la forma: Guardrails y Bounded autonomy.<br/>Memoria por capas si hay varios turnos"]
+  BASE -- "(5) según la tarea" --> T["<b>Patrones transversales</b><br/><b>Acciones irreversibles:</b> Human-in-the-loop, Idempotency key, Saga, Transactional outbox<br/><b>Dura minutos u horas:</b> Durable execution<br/><b>Lee contenido de terceros:</b> Lethal trifecta, Dual LLM, Plan-then-execute, Action-selector, Context minimization<br/><b>Comparte estado:</b> Lease con fencing token, Control optimista, Aislamiento del workspace<br/><b>Muchas llamadas en paralelo:</b> Backpressure, Bulkhead, Ejecución especulativa<br/><b>Depende de un proveedor:</b> Retry con backoff, Circuit breaker con fallback de modelo<br/><b>Cruza equipos:</b> MCP y A2A, Coreografía por eventos, Tracing distribuido<br/><b>Va a producción:</b> Evals, Shadow mode, Canary con kill switch"]
+  classDef q fill:#DCE6F2,stroke:#1F4E79,color:#1F4E79;
+  class Q1,Q2,Q3,Q4 q;
+  style FORMA fill:#F5F8FC,stroke:#1F4E79,stroke-dasharray: 4 3
+```
+
 ---
 
 ## 11. Los patrones en el ciclo ODD
