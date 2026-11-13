@@ -57,9 +57,14 @@ Guía para arquitectos empresariales y de soluciones · Comportamiento, coordina
   - [8.1 Evals como quality gates](#81-evals-como-quality-gates)
   - [8.2 Shadow mode](#82-shadow-mode)
   - [8.3 Canary con kill switch](#83-canary-con-kill-switch)
-- [9. Antipatrones](#9-antipatrones)
-- [10. Cómo elegir](#10-cómo-elegir)
-- [11. Los patrones en el ciclo ODD](#11-los-patrones-en-el-ciclo-odd)
+- [9. Arquitectura orientada a eventos (EDA)](#9-arquitectura-orientada-a-eventos-eda)
+  - [9.1 Reflection orientada a eventos](#91-reflection-orientada-a-eventos)
+  - [9.2 Planning orientado a eventos](#92-planning-orientado-a-eventos)
+  - [9.3 Tool use orientado a eventos](#93-tool-use-orientado-a-eventos)
+  - [9.4 CQRS](#94-cqrs)
+- [10. Antipatrones](#10-antipatrones)
+- [11. Cómo elegir](#11-cómo-elegir)
+- [12. Los patrones en el ciclo ODD](#12-los-patrones-en-el-ciclo-odd)
 - [Anexo A. Combinaciones de patrones](#anexo-a-combinaciones-de-patrones)
   - [A.1 Combinaciones obligatorias](#a1-combinaciones-obligatorias)
   - [A.2 Mapa de dependencias entre familias](#a2-mapa-de-dependencias-entre-familias)
@@ -72,7 +77,7 @@ Guía para arquitectos empresariales y de soluciones · Comportamiento, coordina
   - [B.3 Ejemplo: confirmar las acciones irreversibles](#b3-ejemplo-confirmar-las-acciones-irreversibles)
   - [B.4 Qué no resuelven los hooks](#b4-qué-no-resuelven-los-hooks)
   - [B.5 Cómo usarlo en la spec](#b5-cómo-usarlo-en-la-spec)
-- [12. Lecturas recomendadas](#12-lecturas-recomendadas)
+- [13. Lecturas recomendadas](#13-lecturas-recomendadas)
   - [Imprescindibles](#imprescindibles)
   - [Catálogos de patrones](#catálogos-de-patrones)
   - [Comportamiento (artículos de referencia)](#comportamiento-artículos-de-referencia)
@@ -88,7 +93,7 @@ Guía para arquitectos empresariales y de soluciones · Comportamiento, coordina
 
 **Conclusión:** un agente es un sistema distribuido con un componente no determinista en el centro. Los patrones clásicos (retry, idempotency, saga, circuit breaker, lease, outbox…) siguen valiendo, y además hacen falta patrones propios del LLM para organizar el razonamiento, coordinar agentes y contener la prompt injection. La regla que más se repite en la literatura es **empezar por lo más simple que funcione**: una llamada, después un workflow, después un agente y solo al final varios agentes.
 
-La guía organiza el catálogo en seis familias:
+La guía organiza el catálogo en siete familias:
 
 | Familia | Pregunta que responde | Patrones |
 | --- | --- | --- |
@@ -98,6 +103,7 @@ La guía organiza el catálogo en seis familias:
 | Sistemas distribuidos | ¿Cómo sobrevive a fallos parciales? | Durable execution, Idempotency key, Saga, Outbox, Coreografía por eventos, Retry con backoff, Circuit breaker, Bulkhead, MCP y A2A, Tracing distribuido |
 | Seguridad | ¿Cómo se contiene la prompt injection? | Lethal trifecta, Dual LLM, Plan-then-execute, Action-selector, Context minimization |
 | Operación | ¿Cómo se pone en producción con confianza? | Evals como quality gates, Shadow mode, Canary con kill switch |
+| Arquitectura orientada a eventos | ¿Cómo se desacoplan los pasos mediante eventos? | Reflection, Planning y Tool use orientados a eventos, CQRS |
 
 ```mermaid
 flowchart LR
@@ -107,6 +113,8 @@ flowchart LR
   S["Seguridad"] -.-> C
   S -.-> CO
   S -.-> SD
+  E["EDA<br/>eventos y CQRS"] -.-> CO
+  E -.-> SD
   O["Operación<br/>evals, shadow, canary"] -.-> C
   O -.-> SD
 ```
@@ -1824,7 +1832,191 @@ flowchart LR
 
 ---
 
-## 9. Antipatrones
+## 9. Arquitectura orientada a eventos (EDA)
+
+**Conclusión:** en una arquitectura orientada a eventos los componentes no se llaman entre sí: publican hechos (eventos) en un bus o broker y otros componentes reaccionan a ellos. Aplicada a agentes, convierte cada paso del razonamiento en un evento que se puede registrar, reintentar, repartir entre consumidores y reproducir. Esta sección no repite el catálogo: recoge cómo se expresan en forma de eventos cuatro patrones que ya existen en otras familias (Reflection, Planning, Tool use) y uno nuevo, CQRS, que separa lo que cambia el estado de lo que lo consulta. La coreografía por eventos (6.5) y el Outbox (6.4) son la base distribuida de todo lo que sigue.
+
+**Piezas comunes.**
+
+- **Evento:** un hecho ya ocurrido, inmutable y con nombre en pasado (`PlanCreated`, `ToolCallCompleted`). Lleva `correlation_id` para trazarlo (6.10) y un `event_id` para deduplicar.
+- **Comando:** una petición de acción con destinatario (`RunTool`). Un evento informa; un comando pide.
+- **Bus o broker:** Kafka, un bus de mensajes en la nube o una cola durable. Garantiza orden por clave y reentrega.
+- **Consumidor idempotente:** el bus entrega al menos una vez, así que cada consumidor tolera duplicados (6.2) y deja en una dead letter queue lo que no puede procesar (6.6).
+- **Orquestación o coreografía:** o un componente dirige el flujo y emite comandos, o cada agente reacciona a los eventos de los demás. Con pocos pasos conviene orquestar; con muchos equipos y agentes, coreografiar.
+
+### 9.1 Reflection orientada a eventos
+
+**Qué es.** El patrón Evaluator-Optimizer (3.4) con el generador y el evaluador como consumidores independientes. El generador publica `DraftProduced`; el evaluador lo consume y publica `DraftAccepted` o `DraftRejected` con la crítica; si hay rechazo, el generador reacciona y publica una nueva versión.
+
+**Cuándo aplicarlo.** Cuando generador y evaluador tienen ritmos, modelos o dueños distintos, o cuando varios evaluadores (estilo, seguridad, coste) deben opinar sobre el mismo borrador sin conocerse entre sí.
+
+**Cuándo no.** Un bucle corto dentro de un mismo proceso, donde el bus añade latencia y complejidad sin aportar nada.
+
+**Se combina con.**
+
+- Bounded autonomy (3.10): el número de rondas viaja en el evento y el bucle se corta al llegar al límite
+- Voting (5.3) si hay varios evaluadores que votan
+- Human-in-the-loop (3.7) como un evaluador más, que consume `DraftRejected` tras agotar rondas
+- Tracing distribuido (6.10) para seguir cada ronda
+
+**Detalle.**
+
+- Cada evento lleva `draft_id`, `round` y `max_rounds`. Sin ellos, el bucle por eventos es un bucle infinito invisible.
+- La crítica es parte del evento, no del estado del generador: así el historial de rondas queda en el log y se puede reproducir.
+- Varios evaluadores generan varios veredictos; un agregador espera a los N esperados (fan-in, 5.1) antes de publicar el veredicto final.
+- Un borrador viejo no debe pisar a uno nuevo: se descartan los veredictos cuyo `round` no coincide con el último borrador.
+
+```mermaid
+flowchart TB
+  IN["Petición"] -- "(1)" --> GEN["Generador"]
+  GEN -- "(2) DraftProduced" --> BUS[("Bus de eventos")]
+  BUS -- "(3.a)" --> E1["Evaluador de estilo"]
+  BUS -- "(3.b)" --> E2["Evaluador de seguridad"]
+  E1 -- "(4) Verdict" --> AGG["Agregador"]
+  E2 -- "(4) Verdict" --> AGG
+  AGG -- "(5) DraftRejected<br/>round < max, vuelve a 2" --> GEN
+  AGG -- "(5) DraftAccepted" --> OUT["Resultado"]
+  AGG -- "(5) round = max" --> HI["Human-in-the-loop"]
+```
+
+**Ejemplo.**
+
+- **Caso de uso.** Un agente redacta respuestas a clientes y cada respuesta debe pasar una revisión de tono y otra de cumplimiento normativo, hechas por equipos distintos.
+- **Aplicación.** El generador publica `DraftProduced`; los dos evaluadores lo consumen en paralelo y el agregador publica el veredicto. Con rechazo vuelve al generador con las dos críticas; a la tercera ronda sin aceptar, el borrador pasa a una persona.
+
+### 9.2 Planning orientado a eventos
+
+**Qué es.** El patrón Plan-and-Execute (3.3) con el plan y sus pasos como eventos. Un planner publica `PlanCreated` con la lista de pasos; cada paso se emite como `StepRequested`, lo consume un ejecutor y devuelve `StepCompleted` o `StepFailed`. Un replanner reacciona a los fallos y publica `PlanRevised`.
+
+**Cuándo aplicarlo.** Planes largos que deben sobrevivir a reinicios, repartirse entre varios ejecutores o aprobarse por partes, y casos en que el progreso debe ser observable desde fuera (un panel, otro agente).
+
+**Cuándo no.** Planes de dos o tres pasos que caben en una sola ejecución: Plan-and-Execute directo es más simple.
+
+**Se combina con.**
+
+- Durable execution (6.1): el log de eventos es el registro de pasos
+- Saga (6.3): `StepFailed` dispara los eventos de compensación de los pasos ya hechos
+- Fan-out/fan-in (5.1) para los pasos independientes
+- Human-in-the-loop (3.7) para aprobar `PlanCreated` antes de emitir pasos
+
+**Detalle.**
+
+- El plan es un evento inmutable con versión. Revisarlo crea `PlanRevised` con `version + 1`; los pasos de versiones antiguas se ignoran.
+- Cada paso lleva `plan_id`, `step_id` y una `idempotency_key` (6.2), de modo que reintentar un `StepRequested` no repite el efecto.
+- Los pasos sin dependencias se emiten a la vez; los que dependen de otros esperan al `StepCompleted` que necesitan.
+- El estado del plan es una proyección del log (ver 9.4): no hay que guardar «en qué paso va» en ningún sitio aparte.
+
+```mermaid
+flowchart TB
+  G["Objetivo"] -- "(1)" --> P["Planner"]
+  P -- "(2) PlanCreated" --> BUS[("Bus de eventos")]
+  BUS -- "(3) StepRequested" --> X["Ejecutores"]
+  X -- "(4) StepCompleted, StepFailed" --> BUS
+  BUS -- "(5) StepFailed" --> RP["Replanner"]
+  RP -- "(6) PlanRevised, vuelve a 3" --> BUS
+  BUS -- "(7) todos completados" --> DONE["PlanCompleted"]
+```
+
+**Ejemplo.**
+
+- **Caso de uso.** Un agente de migración de datos divide el trabajo en cuarenta pasos, algunos independientes, y debe poder retomarse tras una caída.
+- **Aplicación.** El planner emite el plan y los pasos independientes se reparten entre ejecutores. Si uno falla, el replanner publica un plan nuevo solo para lo pendiente. Tras una caída, el estado se reconstruye releyendo el log.
+
+### 9.3 Tool use orientado a eventos
+
+**Qué es.** Las llamadas a herramientas dejan de ser invocaciones síncronas y pasan a ser un par de eventos: el agente publica `ToolCallRequested` y un ejecutor de herramientas publica `ToolCallCompleted` o `ToolCallFailed`. El agente reanuda su razonamiento cuando llega el resultado.
+
+**Cuándo aplicarlo.** Herramientas lentas (minutos u horas), con cuotas, con aprobación humana o con efectos que deben auditarse; y cuando varios agentes comparten un mismo catálogo de herramientas (por ejemplo, servidores MCP, 6.9).
+
+**Cuándo no.** Herramientas de lectura rápidas dentro de un ReAct (3.2): la llamada directa es más simple y el modelo espera el resultado de todas formas.
+
+**Se combina con.**
+
+- Idempotency key (6.2): cada `ToolCallRequested` lleva la clave de la acción
+- Outbox (6.4): el evento y el cambio de estado salen en la misma transacción
+- Circuit breaker (6.7), Bulkhead (6.8) y Backpressure (5.7) en el ejecutor de herramientas
+- Bounded autonomy (3.10) y Guardrails (3.9) como consumidores previos que pueden vetar la petición
+
+**Detalle.**
+
+- El agente no se queda bloqueado: guarda `call_id` y el contexto, y se reactiva con el evento de respuesta. Esto permite lanzar varias llamadas y esperar a todas.
+- Un ejecutor de herramientas consume una cola por tipo de herramienta, de modo que una herramienta lenta no frena a las demás y se puede limitar su concurrencia.
+- El resultado de una herramienta es contenido no confiable: antes de volver al modelo pasa por los patrones de la sección 7 (Context minimization, Guardrails de salida).
+- Las peticiones con efectos pasan por un consumidor de políticas que decide si se ejecutan, se piden a una persona o se rechazan, y deja la decisión en el log.
+
+```mermaid
+sequenceDiagram
+  participant A as Agente
+  participant B as Bus de eventos
+  participant P as Política
+  participant T as Ejecutor de herramientas
+  A->>B: (1) ToolCallRequested (call_id, idempotency_key)
+  B->>P: (2) petición
+  P->>B: (3) ToolCallApproved
+  B->>T: (4) petición aprobada
+  T->>T: (5) ejecuta con Retry
+  T->>B: (6) ToolCallCompleted o ToolCallFailed
+  B->>A: (7) resultado, el agente reanuda
+```
+
+**Ejemplo.**
+
+- **Caso de uso.** Un agente de soporte puede reembolsar pedidos, consultar el CRM y abrir tickets, y cada reembolso debe quedar auditado y no duplicarse.
+- **Aplicación.** Las consultas van directas. El reembolso se publica como `ToolCallRequested` con su clave de idempotencia; el consumidor de políticas lo aprueba si el importe está por debajo del umbral y, si no, lo envía a una persona. El log sirve de auditoría.
+
+### 9.4 CQRS
+
+**Qué es.** Command Query Responsibility Segregation: se separa el modelo que acepta cambios (comandos) del modelo que responde consultas (queries). El lado de escritura valida y emite eventos; uno o varios proyectores los consumen y construyen **read models** (vistas) optimizados para cada consulta. Suele ir con Event Sourcing, donde el log de eventos es la fuente de verdad.
+
+**Cuándo aplicarlo.** Cuando lo que el agente escribe y lo que necesita leer tienen formas muy distintas: un historial de acciones auditable por un lado y vistas rápidas (estado de la tarea, memoria resumida, panel de coste) por otro; cuando hay muchas más lecturas que escrituras; o cuando varios agentes leen el mismo estado sin poder pisarse al escribirlo.
+
+**Cuándo no.** Aplicaciones simples con un CRUD que nadie necesita escalar. CQRS añade consistencia eventual y más piezas, y no compensa si una sola tabla basta.
+
+**Se combina con.**
+
+- Outbox (6.4) para publicar los eventos sin perderlos
+- Durable execution (6.1): reproducir el log reconstruye el estado de un agente
+- Memoria por capas (3.8): la memoria de largo plazo es un read model construido a partir de los eventos de las conversaciones
+- Blackboard (4.5): la pizarra puede ser un read model compartido, con un único escritor por tipo de evento
+- Control optimista (5.6) en el lado de escritura
+
+**Detalle.**
+
+- **Lado comando:** recibe una orden, comprueba las reglas contra el estado actual y, si se cumplen, añade eventos al log. No devuelve datos de consulta, solo si se aceptó.
+- **Lado consulta:** lee solo de las vistas. Nunca decide ni escribe en el modelo de escritura.
+- **Proyectores:** consumen los eventos y actualizan las vistas; son idempotentes y se pueden reconstruir desde cero reproduciendo el log, por ejemplo cuando se añade una vista nueva.
+- **Consistencia eventual:** una lectura inmediata tras escribir puede no ver el cambio. Se maneja devolviendo la versión escrita para que el cliente espere o refresque, o leyendo del lado de escritura cuando la frescura importa.
+- **Versionado de eventos:** los eventos viejos no se reescriben. Los cambios de esquema se resuelven con versiones y conversores al leer.
+- **Secretos y datos personales:** un log inmutable no se puede borrar, así que los datos sensibles no deben entrar en el evento (se guarda una referencia) para poder cumplir con el borrado.
+
+```mermaid
+flowchart TB
+  U["Agente o usuario"] -- "(1) comando" --> CH["Command handler<br/>valida reglas"]
+  CH -- "(2) eventos" --> LOG[("Log de eventos<br/>fuente de verdad")]
+  LOG -- "(3) eventos" --> PR["Proyectores<br/>idempotentes"]
+  PR -- "(4) actualizan" --> V[("Vistas read model<br/>tareas, memoria, coste")]
+  Q["Consulta del agente o del panel"] -- "(5) lee solo de las vistas" --> V
+```
+
+**Ejemplo.**
+
+- **Caso de uso.** Un sistema de varios agentes de desarrollo trabaja sobre un mismo proyecto. Hay que saber en cualquier momento qué tarea tiene cada agente, qué se ha decidido y cuánto se ha gastado, y poder auditar quién hizo qué.
+- **Aplicación.** Los agentes envían comandos (`ClaimTask`, `RecordDecision`) que, si son válidos, se añaden al log. Tres proyectores mantienen las vistas de tareas, decisiones y coste; los agentes consultan solo las vistas. Si cambia el formato del panel de coste, se reconstruye esa vista desde el log.
+
+**Tabla de decisión.**
+
+| Necesito… | Uso |
+| --- | --- |
+| Razonamiento por rondas con varios revisores independientes | 9.1 Reflection orientada a eventos |
+| Planes largos, reanudables y repartibles | 9.2 Planning orientado a eventos |
+| Herramientas lentas, auditadas o compartidas | 9.3 Tool use orientado a eventos |
+| Estado auditable y vistas rápidas para varios lectores | 9.4 CQRS |
+
+**Riesgos de la EDA (ver también 10. Antipatrones).** Eventos sin versión ni `correlation_id`, consumidores que no toleran duplicados, bucles de eventos sin límite de rondas, y confundir evento con comando. El flujo es más difícil de seguir que una llamada directa: sin Tracing distribuido (6.10) no se puede depurar.
+
+---
+
+## 10. Antipatrones
 
 El estudio "Why Do Multi-Agent LLM Systems Fail?" (Cemri et al., 2025) agrupa los fallos de los sistemas multiagente en tres categorías: **especificación y diseño del sistema**, **desalineación entre agentes** y **verificación y terminación de la tarea**. Los antipatrones más habituales encajan en ellas:
 
@@ -1844,7 +2036,7 @@ El estudio "Why Do Multi-Agent LLM Systems Fail?" (Cemri et al., 2025) agrupa lo
 
 ---
 
-## 10. Cómo elegir
+## 11. Cómo elegir
 
 ```mermaid
 flowchart LR
@@ -1897,7 +2089,7 @@ flowchart TB
 
 ---
 
-## 11. Los patrones en el ciclo ODD
+## 12. Los patrones en el ciclo ODD
 
 Elegir un patrón es una decisión de diseño, y en ODD las decisiones quedan escritas antes del primer write:
 
@@ -1913,7 +2105,7 @@ Detalles en las guías "ODD aplicado a la generación de agentes", "RDD en el ci
 
 ## Anexo A. Combinaciones de patrones
 
-**Conclusión:** un agente real nunca usa un solo patrón. Las familias (comportamiento, coordinación, concurrencia, sistemas distribuidos, seguridad, operación) sirven para ordenar el catálogo, pero el diseño se hace combinándolas: un ReAct que hace tool calls con efectos necesita Bounded autonomy (comportamiento), Idempotency key y Retry (distribuidos) y, si lee contenido externo, un patrón de seguridad. Cada ficha del catálogo tiene su apartado "Se combina con". Este anexo recoge las combinaciones más importantes.
+**Conclusión:** un agente real nunca usa un solo patrón. Las familias (comportamiento, coordinación, concurrencia, sistemas distribuidos, seguridad, operación, EDA) sirven para ordenar el catálogo, pero el diseño se hace combinándolas: un ReAct que hace tool calls con efectos necesita Bounded autonomy (comportamiento), Idempotency key y Retry (distribuidos) y, si lee contenido externo, un patrón de seguridad. Cada ficha del catálogo tiene su apartado "Se combina con". Este anexo recoge las combinaciones más importantes.
 
 ### A.1 Combinaciones obligatorias
 
@@ -1987,6 +2179,7 @@ Ocho recetas de partida que mezclan familias. Son un punto de partida, no un dis
 | **Varios agentes de desarrollo en paralelo** (Claude Code) | Orchestrator-workers + Aislamiento del workspace (worktrees) + Control optimista al integrar + Blackboard (Engram) + Evals como quality gates | Coordinación, concurrencia, operación |
 | **Agente crítico con proveedor externo** | Routing + Circuit breaker con fallback local + Retry + Bulkhead + Evals + Shadow mode + Canary con kill switch | Comportamiento, distribuidos, operación |
 | **Atención al cliente** | Routing (triage) + Handoff + Memoria por capas + Durable execution + Guardrails + Human-in-the-loop | Comportamiento, coordinación, distribuidos |
+| **Agentes desacoplados por eventos** | Coreografía o orquestación + Outbox + Idempotency key + Retry con dead letter + Tracing + CQRS para las vistas | Distribuidos, EDA |
 | **Agente de control de seguridad** | Fan-out (un control por rama) + Voting en hallazgos críticos + Evaluator-Optimizer + Human-in-the-loop + Tracing | Concurrencia, comportamiento, distribuidos |
 
 Ejemplo de la receta "Agente con acciones de negocio": cada patrón cubre un fallo distinto.
@@ -2023,10 +2216,10 @@ Algunas combinaciones se estorban. Si aparecen juntas, hay que decidir cuál man
 
 ### A.5 Cómo usarlo en la spec
 
-1. Elige la forma con la escalera de complejidad (2.1) y el árbol de la sección 10.
+1. Elige la forma con la escalera de complejidad (2.1) y el árbol de la sección 11.
 2. Repasa la tabla A.1 para cada patrón elegido y añade los que falten.
 3. Comprueba la tabla A.4: si hay una tensión, deja escrita en la spec la decisión y el motivo.
-4. Cada patrón añadido tiene su AC y su eval o test (sección 11).
+4. Cada patrón añadido tiene su AC y su eval o test (sección 12).
 
 ---
 
@@ -2090,11 +2283,11 @@ Con `ask` la persona decide en cada caso (Human-in-the-loop); con `deny` el agen
 
 1. Para cada patrón obligatorio de la tabla A.1 que sea una regla sin excepciones, decide si se implementa como hook o como lógica de la aplicación.
 2. Anota en la spec el evento, el matcher y la decisión (`deny`, `ask`) de cada hook.
-3. Cada hook tiene su AC y su test: se ejecuta con un JSON de ejemplo y se comprueba el código de salida y el mensaje (sección 11).
+3. Cada hook tiene su AC y su test: se ejecuta con un JSON de ejemplo y se comprueba el código de salida y el mensaje (sección 12).
 
 ---
 
-## 12. Lecturas recomendadas
+## 13. Lecturas recomendadas
 
 ### Imprescindibles
 
@@ -2126,6 +2319,12 @@ Con `ask` la persona decide en cada caso (Human-in-the-loop); con `deny` el agen
 - **Enterprise Integration Patterns** (Hohpe y Woolf, Addison-Wesley, 2003). Mensajería, routers, agregadores, dead letter: el vocabulario de la coordinación por mensajes.
 - **[Pattern: Saga](https://microservices.io/patterns/data/saga.html)** y **[Transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html)** (Chris Richardson, microservices.io).
 - **[Temporal: durable execution](https://docs.temporal.io/)**. Documentación de referencia para workflows duraderos, aplicable a agentes.
+
+### Arquitectura orientada a eventos
+
+- **[What do you mean by "Event-Driven"?](https://www.martinfowler.com/articles/201701-event-driven.html)** (Martin Fowler, 2017). Los cuatro significados de «orientado a eventos»: notificación, transferencia de estado, event sourcing y CQRS.
+- **[CQRS pattern](https://learn.microsoft.com/azure/architecture/patterns/cqrs)** (Azure Architecture Center). Modelos de lectura y escritura separados, y cómo sincronizarlos con eventos.
+- **[A Distributed State of Mind: Event-Driven Multi-Agent Systems](https://www.confluent.io/blog/event-driven-multi-agent-systems/)** (Confluent, 2025). Orchestrator-worker, jerárquico, blackboard y mercado reescritos con eventos sobre Kafka.
 
 ### Seguridad
 
